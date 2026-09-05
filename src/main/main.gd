@@ -41,8 +41,14 @@ var rng := RandomNumberGenerator.new()
 ## using rather than snapping to the default. SPREAD is deliberately not remembered.
 var parked := {}
 
-## Which die in `Rules.kit(size)` the next roll uses. A big die is dead weight against
-## a wall -- picking the small one is how the endgame is played rather than endured.
+## The dice held. Each die is its list of face values, not a face count: a won die can
+## read [1,1,5,5], which is streaky, or [3,3,3], which is certain. Run state rather
+## than something derived from `size`, because dice are won and lost and have to
+## outlive the board they were picked up on.
+var kit: Array[PackedInt32Array] = []
+
+## Which die in `kit` the next roll uses. A big die is dead weight against a wall --
+## picking the small one is how the endgame is played rather than endured.
 var die_index := 0
 
 ## Spent with X to roll again without spending a turn. Earned on any roll that traps
@@ -86,7 +92,8 @@ func new_game() -> void:
 	won = false
 	busy = false
 	rerolls = 0
-	die_index = mini(die_index, Rules.kit(size).size() - 1)
+	kit = Rules.kit(size)
+	die_index = mini(die_index, kit.size() - 1)
 	rig.pan = Vector2.ZERO
 	view3d.size = size
 	player.position = view3d.world(coords)
@@ -106,7 +113,7 @@ func _refresh_hud() -> void:
 	hud.refresh({
 		"coords": coords, "size": size, "links": links, "moves": moves,
 		"roll": roll, "turns": turns, "won": won,
-		"faces": die_faces(), "kit": Rules.kit(size), "die_index": die_index,
+		"kit": kit, "die_index": die_index,
 		"rerolls": rerolls,
 		"mode": "SPREAD" if view == View.SPREAD else "FOCUS",
 	})
@@ -115,13 +122,13 @@ func _refresh_hud() -> void:
 ## The tray is the kit and the rerolls, as objects. Everything the HUD used to spell
 ## out in words is one of these.
 func _refresh_tray() -> void:
-	tray.set_kit(Rules.kit(size), die_index)
+	tray.set_kit(kit, die_index)
 	tray.set_spares(rerolls)
 
 
-## Faces on the die currently selected.
-func die_faces() -> int:
-	return Rules.kit(size)[die_index]
+## The die currently selected, as its list of face values.
+func die() -> PackedInt32Array:
+	return kit[die_index]
 
 
 ## Layout, camera and everything sitting on the board move together, so the deck
@@ -199,7 +206,8 @@ func reroll() -> void:
 
 
 func _roll(spend_turn: bool) -> void:
-	roll = rng.randi_range(1, die_faces())
+	var faces := die()
+	roll = faces[rng.randi_range(0, faces.size() - 1)]
 	if spend_turn:
 		turns += 1
 	moves = Board.legal_moves(coords, size, roll)
@@ -222,7 +230,7 @@ func _roll(spend_turn: bool) -> void:
 ## Picks a die from the kit. Only between choices -- once markers are on the board the
 ## number keys are choosing one of them.
 func _pick_die(i: int) -> void:
-	if won or i >= Rules.kit(size).size():
+	if won or i >= kit.size():
 		return
 	die_index = i
 	Audio.play("pick")

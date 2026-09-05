@@ -15,6 +15,7 @@ extends Node3D
 ## entirely of lines was the one lump of matter on screen.
 
 const Pal = preload("res://src/palette.gd")
+const Rules = preload("res://src/game/rules.gd")
 
 ## Distance in front of the camera. Fixed, so the tray keeps its size on screen no
 ## matter how far the fit pulls the camera back.
@@ -73,8 +74,9 @@ func _layout() -> void:
 	position = Vector3(-half_w + 0.42, -half_h + 0.32, -DEPTH)
 
 
-## Shows the kit. A board with one die shows one die.
-func set_kit(kit: PackedInt32Array, sel: int) -> void:
+## Shows the kit. A board with one die shows one die. Each entry is a die's list of
+## face values, so the silhouette counts its *sides* and the label spells the faces.
+func set_kit(kit: Array[PackedInt32Array], sel: int) -> void:
 	picked = sel
 	for i in dice.size():
 		var d: Node3D = dice[i]
@@ -86,12 +88,12 @@ func set_kit(kit: PackedInt32Array, sel: int) -> void:
 		d.scale = Vector3.ONE * (1.0 if on else 0.68)
 		var c: Color = Pal.C_MOVE if on else Pal.C_MOVE * 0.45
 		# One side per face, so the shape counts the die out for you.
-		d.mesh = _bipyramid(kit[i], 0.11, 0.16)
+		d.mesh = _bipyramid(kit[i].size(), 0.11, 0.16)
 		d.material_override = _mat(c)
 		if not on:
 			d.rotation = Vector3.ZERO
 		var face: Label3D = d.get_node("Face")
-		face.text = "d%d" % kit[i]
+		face.text = Rules.die_name(kit[i])
 		face.modulate = c
 
 

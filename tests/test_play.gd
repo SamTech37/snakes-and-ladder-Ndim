@@ -40,9 +40,9 @@ func _initialize() -> void:
 		await process_frame
 
 		# The kit is what the player picks between, so the pick has to reach the roll.
-		var kit := Rules.kit(size)
+		var kit: Array[PackedInt32Array] = m.kit
 		m._pick_die(kit.size() - 1)
-		assert(m.die_faces() == kit[kit.size() - 1], "picking a die did not change the roll")
+		assert(m.die() == kit[kit.size() - 1], "picking a die did not change the roll")
 		m._pick_die(0)
 
 		var turns := 0

@@ -36,15 +36,36 @@ static var SIZES: Array[PackedInt32Array] = [
 const DICE := [6, 3]
 
 
-## The kit as it exists on this board, capped and deduplicated. On a 4-wide lattice
-## both dice cap to 3, and offering the same die twice is noise.
-static func kit(size: PackedInt32Array) -> PackedInt32Array:
-	var out := PackedInt32Array()
+## The starting kit on this board, capped and deduplicated. On a 4-wide lattice both
+## dice cap to 3, and offering the same die twice is noise.
+static func kit(size: PackedInt32Array) -> Array[PackedInt32Array]:
+	var out: Array[PackedInt32Array] = []
 	for d in DICE:
-		var f := die_faces(d, size)
+		var f := faces_for(d, size)
 		if not out.has(f):
 			out.append(f)
 	return out
+
+
+## A plain die as a list of faces: 1..n, capped to what this board can use. A die is a
+## list rather than a count because a die won off a foe need not be plain -- [1,1,5,5]
+## is streaky and [3,3,3] is certain, and both have to roll through the same code.
+static func faces_for(die: int, size: PackedInt32Array) -> PackedInt32Array:
+	var out := PackedInt32Array()
+	for v in range(1, die_faces(die, size) + 1):
+		out.append(v)
+	return out
+
+
+## What to call a die. Plain 1..n is "d5"; anything else is spelled out, because a
+## count would be a lie about a die whose faces are not 1..n.
+## ponytail: no separator -- every face on a playable board is a single digit, and the
+## silhouette already counts the sides. Revisit if a face ever goes above 9.
+static func die_name(faces: PackedInt32Array) -> String:
+	for i in faces.size():
+		if faces[i] != i + 1:
+			return "".join(Array(faces).map(func(v): return str(v)))
+	return "d%d" % faces.size()
 
 
 ## True when this roll traps the player: nothing legal, one forced move, or nothing

@@ -57,10 +57,10 @@ func _moves(s: Dictionary) -> String:
 ## The kit, with the selected die marked. The number keys pick between them while no
 ## markers are up, which is the same key doing the other half of its job.
 func _kit(s: Dictionary) -> String:
-	var kit: PackedInt32Array = s["kit"]
+	var kit: Array[PackedInt32Array] = s["kit"]
 	var parts := PackedStringArray()
 	for i in kit.size():
-		parts.append("[%d] d%d%s" % [i + 1, kit[i], " <" if i == s["die_index"] else ""])
+		parts.append("[%d] %s%s" % [i + 1, Rules.die_name(kit[i]), " <" if i == s["die_index"] else ""])
 	return "die  " + "  ".join(parts)
 
 
