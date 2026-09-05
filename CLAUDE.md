@@ -159,6 +159,10 @@ The camera is **perspective** (`fov = 50`). Orthographic gives a deck zero conve
 
 `STACK_ROW_DIR` is diagonal rather than along x on purpose: it is exactly screen-right at the isometric angle, so a row of decks reads horizontally instead of marching off diagonally.
 
+**A deck is piled or fanned, alternating.** `STACK_STEP_PILE` is pure depth; `STACK_STEP_FAN` slides each slice along its own plane as it recedes, so neighbouring decks read as different kinds of object rather than the same one twice. Straight out of `ideas/sketch.png`. A drift like the fan's was once applied to *every* deck and reverted, correctly — uniformly applied it just makes every deck a sheared prism and still tells none of them apart. **The contrast is the signal**, so only every other deck gets it, and a 3D board (one deck) only ever uses PILE.
+
+**4D is a row of cubes, 5D is a grid of them.** A 4D tensor is a row of 3D blocks and a 5D one is a 2D arrangement of the same, which is how you read it without pretending to see four axes at once. Axis 3 lays decks along the row, axis 4 stacks those rows downward, and each axis above takes the next direction in turn at a stride clearing what the axes below occupy — so 6D is a row of grids, which is the honest limit of this layout. Axes 4+ used to march downward at a stride multiplied by every axis in turn, which threw a 5D board's nine decks across many times the board's own size.
+
 **The slice step is pure depth.** `(0, 0, -1.6)` — negative z because the camera sits on +z, so plane 0, where the player starts, is at the *front* of the deck. A 3D board is a **cube cut into planes** and it has to stay cube-shaped.
 
 Two attempts have broken that and both were reverted:
@@ -212,7 +216,7 @@ A foe carries a **commit order**, which is the 分蛋糕 split — one side fram
 
 **The chaser is never dimmed.** It is the one thing on the board that ignores which plane is lit — it is a node rather than a line in the plane mesh, and `board_view.gd` draws its next-step arrow at full brightness too. The HUD carries `chaser N` in cells, because in a projected 4D view nobody can count that by eye.
 
-**Climbing a floor is a move, so it moves.** A whole board appearing where another one was is the largest cut there could be. `_ascend()` pulls the camera back off the floor you cleared, deals the next one, and then lets it assemble: it arrives at the far end of the spread from wherever the view sits and travels to it, so the new dimension visibly puts itself together out of its own planes. `anim = false` still cuts all of it.
+**Every board change is a move, so it moves.** `_go_to()` is the one path that changes `size` — climbing a floor, and cycling the board with `D` — because there is no version of a whole lattice appearing where another one was that does not read as a glitch. Climbing a floor is a move, so it moves.** A whole board appearing where another one was is the largest cut there could be. `_ascend()` pulls the camera back off the floor you cleared, deals the next one, and then lets it assemble: it arrives at the far end of the spread from wherever the view sits and travels to it, so the new dimension visibly puts itself together out of its own planes. `anim = false` still cuts all of it.
 
 **Losing the boss is not a wall.** You are still standing on the goal, so it comes straight back and each attempt costs a die. That is how a weak kit bleeds out instead of being locked out of the game with nothing left to do — and it is why sprinting past every optional fight is not free.
 

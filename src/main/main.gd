@@ -164,6 +164,13 @@ func _ascend() -> void:
 	floors += 1
 	Audio.play("win")
 	view3d.win_burst()
+	_go_to(Rules.floor_size(size.size() + 1), true)
+
+
+## Swapping one board for another, without the swap being a cut. The board you are leaving falls away from the camera, the next one is dealt behind the dark, and then it assembles itself out of its own planes.
+##
+## Every path that changes `size` comes through here -- climbing a floor, and cycling the board with D -- because there is no version of a whole lattice appearing where another one was that does not read as a glitch.
+func _go_to(to: PackedInt32Array, keep: bool) -> void:
 	busy = true
 	if anim:
 		var from_zoom: float = rig.zoom
@@ -171,8 +178,10 @@ func _ascend() -> void:
 		out.tween_method(func(u: float): rig.set_zoom(lerpf(from_zoom, from_zoom * 3.5, u)),
 				0.0, 1.0, 0.5).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
 		await out.finished
-	size = Rules.floor_size(size.size() + 1)
-	new_game(true)
+	size = to
+	new_game(keep)
+	# new_game() clears `busy` -- it is dealing a floor that is ready to play. This one is not ready yet: it is still coming together, and a roll landing in the middle of that would be a move made on a board the player cannot read.
+	busy = true
 	if anim:
 		await _assemble()
 	busy = false
@@ -349,12 +358,10 @@ func snap_view(v: View) -> void:
 	_refresh_hud()
 
 
-## Next board in SIZES, wrapping. Deals a fresh game, because changing the shape of
-## the lattice invalidates every coordinate in the old one.
+## Next board in SIZES, wrapping. Deals a fresh run, because changing the shape of the lattice invalidates every coordinate in the old one -- and it travels there, because a board changing shape is the biggest move the game can make and it is not allowed to cut either.
 func _cycle_size() -> void:
 	var i := Rules.SIZES.find(size)
-	size = Rules.SIZES[(i + 1) % Rules.SIZES.size()] if i >= 0 else Rules.SIZES[0]
-	new_game()
+	_go_to(Rules.SIZES[(i + 1) % Rules.SIZES.size()] if i >= 0 else Rules.SIZES[0], false)
 
 
 func do_roll() -> void:

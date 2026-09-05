@@ -78,11 +78,22 @@ func _checks() -> void:
 			assert(Board.coords_to_world(next, size, 1.0).x - p0.x >= float(size[0]),
 					"%s: exploded planes overlap" % str(size))
 		assert(Board.GAP >= 1.0)
-		# Slices stack straight back with no sideways drift, so the board stays a cube
-		# cut into planes rather than a sheared prism.
+		# Both slicings recede into the screen rather than climbing the frame, and the piled one carries no sideways drift at all: a 3D board only ever uses PILE, and it has to stay a cube cut into planes rather than a sheared prism.
 		for step in [Board.STACK_STEP_PILE, Board.STACK_STEP_FAN]:
 			assert(step.z < -1.0, "slices must recede, not climb")
-			assert(is_zero_approx(step.x) and is_zero_approx(step.y), "drift shears the cube")
+		assert(is_zero_approx(Board.STACK_STEP_PILE.x) and is_zero_approx(Board.STACK_STEP_PILE.y),
+				"a piled deck must not drift -- that is what keeps the cube a cube")
+		# And the fanned one has to actually fan, or neighbouring decks are the same object twice. The contrast between the two is the only thing that tells decks apart.
+		assert(not Board.STACK_STEP_FAN.is_equal_approx(Board.STACK_STEP_PILE),
+				"the two slicings are identical, so no deck can be told from its neighbour")
+		assert(absf(Board.STACK_STEP_FAN.x) > 0.3, "a fanned deck has to splay sideways to read as fanned")
+
+		# Decks pack as a grid, so the span they occupy grows with the square root of their number rather than in a line. Four decks of a four-wide board used to be strung across thirty-odd units.
+		if size.size() > 3:
+			var far := Board.index_to_coords(n - 1, size)
+			var spread_x := absf(Board.coords_to_world(far, size, 0.0).x)
+			assert(spread_x < float(size[0] + Board.GAP) * Board.deck_count(size),
+					"%s: decks occupy %.1f units, a row's worth or worse" % [str(size), spread_x])
 
 		# Links never chain, never touch start or goal, and stay within their span.
 		var rng := RandomNumberGenerator.new()

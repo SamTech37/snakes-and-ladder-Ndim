@@ -33,7 +33,7 @@ Not verified: nobody has played a full run by hand.
 1. **Playtest.** Catch frequency, whether banked tokens dominate (`carry_tokens` is the flag), whether three contests are enough, and which of foe / chaser / boss to cut.
 2. **The blind commit orders** (i) and (ii) — commit first, learn after. Only a bet once the vocabulary exists.
 3. **Procedural generation** (job iii). Still uniform rejection sampling: no difficulty curve, no guarantee a snake is reachable, foes placed by the same blunt sampler.
-4. **4D decks still look identical**, and the reference art in `ideas/` is still unused.
+4. **The reference art in `ideas/` is still only half used** — the plates carry perspective-warped and wave-displaced grids; the board planes are still flat square grids. The deck arrangement in `sketch.png` is built.
 
 ## 2026-09-05 — playability (`feat/playable`, 6 commits)
 

@@ -21,35 +21,22 @@ const GAP := 2.0
 ## exploded row and the two views stopped being distinguishable. Cells on the dimmed
 ## planes are background, not targets: what has to be legible in FOCUS is the lit
 ## plane, and tests/test_readable.gd measures exactly that.
-## Two fan directions for a packed deck, alternating stack by stack. Straight from
-## ideas/sketch.png: neighbouring decks are drawn sliced differently -- one piled
-## upward, the next fanned sideways -- so a step along axis 3 is visibly a different
-## kind of move from a step along axis 2, instead of both reading as "over there".
+## How a deck of planes is sliced, alternating deck by deck. Straight out of ideas/sketch.png: neighbouring decks are drawn differently -- one piled square, the next fanned out like a hand of cards -- so a step along axis 3 is visibly a different kind of move from a step along axis 2 instead of both reading as "over there".
 ##
-## Both carry a small negative z. The camera sits on +z, so plane 0 -- where the
-## player starts -- ends up at the front of its deck rather than buried at the back,
-## and no two planes are ever coplanar.
-## Depth-dominant, because a 3D board is a **cube sliced into planes**: the slices
-## recede into the screen with gaps cut between them, and the cube keeps its shape.
+## Both carry a negative z. The camera sits on +z, so plane 0 -- where the player starts -- ends up at the front of its deck rather than buried at the back, and no two planes are ever coplanar.
 ##
-## These were briefly 1.55 *up* and 0.4 back, which made the deck a staircase
-## climbing the screen instead of a cube. It also left only 2.0 units of depth across
-## the whole stack, so switching the camera to perspective changed almost nothing --
-## an 8% convergence at 25 units of camera distance.
+## PILE is pure depth, because a 3D board is a **cube sliced into planes**: the slices recede into the screen with gaps cut between them, and the cube keeps its shape. It was briefly 1.55 *up* and 0.4 back, which made the deck a staircase climbing the screen and left only 2.0 units of depth across the whole stack -- so switching the camera to perspective was an 8% change and looked like nothing. A 3D board only ever uses this one.
 ##
-## Pure depth, no lateral drift at all. A drift of 0.45 per slice was in here to tell
-## neighbouring 4D decks apart, but it shears the stack: six slices each nudged
-## sideways is a sheared prism, not a cube. A cube sliced into planes has to stay a
-## cube, so the drift is gone and the two steps are for now identical.
-##
-## 4D decks therefore no longer look different from one another. That needs a device
-## that does not deform the cube -- see CLAUDE.md.
+## FAN slides each slice along its own plane as it recedes, which is what the sketch draws. A drift like this was in here once applied to *every* deck and was reverted, correctly: uniformly applied it just makes every deck a sheared prism and still tells none of them apart. The signal is the **contrast** -- it is only worth anything next to a piled deck, so only every other deck gets it.
 const STACK_STEP_PILE := Vector3(0.0, 0.0, -1.6)
-const STACK_STEP_FAN := Vector3(0.0, 0.0, -1.6)
+const STACK_STEP_FAN := Vector3(0.45, -0.22, -1.4)
 
-## Direction whole stacks travel while packed. Diagonal rather than along x so a row
-## of stacks reads horizontally at the isometric angle FOCUS uses.
+## Direction whole decks travel across a packed row. Diagonal rather than along x so the row reads horizontally at the isometric angle FOCUS uses.
 const STACK_ROW_DIR := Vector3(0.70710678, 0.0, -0.70710678)
+
+## Deck pitch while packed, as a multiple of the board's own width and height. Decks used to be strung out along a single row at 1.8 board-widths each, which on a 4D board put four decks across 30-odd units of a board four cells wide: the lattice ended up a thin smear across the screen with the camera fit backed off far enough to hold all of it. They pack as a grid now, and close.
+const PACK_X := 1.08
+const PACK_Y := 1.15
 
 
 static func total_cells(size: PackedInt32Array) -> int:
@@ -147,29 +134,34 @@ static func _in_plane_y(c: PackedInt32Array) -> float:
 	return float(c[1]) if c.size() > 1 else 0.0
 
 
-## Axes 3+ move whole stacks around. Axis 3 lines the stacks up in a row while they
-## are packed, and once each stack has exploded into its own row it stacks those rows
-## downward instead -- so a 4D board is a row of decks, and spread it is one row of
-## planes per deck, rows under each other.
+## How many decks the board is made of: axes 3+ flattened. A 3D board has exactly one, a [4,4,4,4] has four, a [3,3,3,3,3] has nine.
+static func deck_count(size: PackedInt32Array) -> int:
+	var n := 1
+	for k in range(3, size.size()):
+		n *= size[k]
+	return n
+
+
+## Axes 3+ move whole decks around, one direction per axis. **4D is a row of cubes, 5D is a grid of them** -- the way a 4D tensor is a row of 3D blocks and a 5D one is a 2D arrangement of the same, which is how you read the thing without pretending to see four axes at once.
 ##
-## Packed, the row runs along STACK_ROW_DIR rather than x: laid along x the stacks
-## march off diagonally at the isometric angle, because the plane fan goes that way.
+## Axis 3 lays decks along the row, axis 4 stacks those rows downward, and each axis above that takes the next direction in turn at a stride wide enough to clear everything the axes below it already occupy -- so a 6D board is a row of grids. That last part is the honest limit of this layout: past 5D it is tiling in two directions, not showing you a sixth.
+##
+## Axes 4+ used to march downward at a stride that multiplied by every axis in turn, which threw a 5D board's nine decks across many times the board's own size and left the lattice a scatter of specks.
 static func _stack_offset(c: PackedInt32Array, size: PackedInt32Array, spread: float) -> Vector3:
 	if c.size() <= 3:
 		return Vector3.ZERO
 	var w := (size[0] + GAP) if size.size() > 0 else GAP
 	var h := (size[1] + GAP) if size.size() > 1 else GAP
-	var packed := STACK_ROW_DIR * (w * 1.8)
-	var loose := Vector3(0.0, -h * 1.6, 0.0)
-	var off := packed.lerp(loose, spread) * float(c[3])
-	# ponytail: axes 4+ just keep marching downward at a widening stride, which is
-	# over-generous while packed. A 6D board would want a real basis matrix; nothing
-	# has needed one yet and there is no board that size to look at.
-	var down := h * 1.6 * float(size[3])
-	for k in range(4, c.size()):
-		off.y -= float(c[k]) * down
-		down *= float(size[k])
-	return off
+	var dirs := [STACK_ROW_DIR * (w * PACK_X), Vector3(0.0, -h * PACK_Y, 0.0)]
+	var stride := [1.0, 1.0]
+	var packed := Vector3.ZERO
+	for k in range(3, c.size()):
+		var d := (k - 3) % 2
+		packed += dirs[d] * stride[d] * float(c[k])
+		stride[d] *= float(size[k])
+	# Exploded, each deck is already a full row of planes, so they can only stack downward.
+	var loose := Vector3(0.0, -h * 1.6, 0.0) * float(stack_of(c, size))
+	return packed.lerp(loose, spread)
 
 
 static func manhattan(a: PackedInt32Array, b: PackedInt32Array) -> int:
