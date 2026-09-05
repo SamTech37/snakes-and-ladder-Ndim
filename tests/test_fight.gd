@@ -15,7 +15,7 @@ const Ghosts = preload("res://src/ghost/ghosts.gd")
 ## Which checks ran to the end. A failed `assert` does not stop a `--script` run -- it prints, abandons the function it is in, and returns to the caller, so a test can fail and the process still exit 0. Each check signs off when it finishes, and the run fails if a signature is missing.
 var done := {}
 
-const CHECKS := ["contests", "stake", "cap", "boss", "run_over"]
+const CHECKS := ["contests", "stake", "cap", "boss", "run_over", "keys"]
 
 
 func _initialize() -> void:
@@ -26,6 +26,7 @@ func _initialize() -> void:
 	await _cap()
 	await _boss()
 	await _run_over()
+	await _keys()
 
 	for c in CHECKS:
 		if not done.has(c):
@@ -169,6 +170,44 @@ func _run_over() -> void:
 	assert(m.kit.is_empty() and m.dead, "an empty kit did not end the run")
 	assert(m.fight.is_empty(), "the fight outlived the run")
 	done["run_over"] = true
+	m.free()
+
+
+## SPACE means one thing -- commit to what is in front of you -- and the number keys belong to the board alone. Choosing a die or a contest is on the arrows.
+func _keys() -> void:
+	var m: Node3D = await _game()
+	m.kit = _kit([PackedInt32Array([1, 2, 3]), PackedInt32Array([1, 2, 3, 4, 5])])
+	m.die_index = 0
+
+	# Nothing on the board: SPACE throws.
+	m._commit()
+	assert(m.roll > 0, "SPACE did not roll")
+	var turns: int = m.turns
+
+	# A roll you cannot live with: SPACE again, and it costs a token rather than a turn.
+	m.rerolls = 1
+	m._commit()
+	assert(m.rerolls == 0, "SPACE did not spend a token to reroll")
+	assert(m.turns == turns, "a reroll cost a turn")
+
+	# Arrows walk the kit, and they wrap.
+	m._cycle_die(1)
+	assert(m.die_index == 1, "LEFT/RIGHT did not walk the kit")
+	m._cycle_die(1)
+	assert(m.die_index == 0, "the kit did not wrap")
+
+	# A TELL foe shows its die and leaves the contest to you: UP/DOWN move the highlight, SPACE commits whatever it is on.
+	var foe := _foe(PackedInt32Array([6, 6]), [0, 1], Rules.TELL)
+	m._start_fight(foe, 0)
+	assert(m.fight["game"] < 0, "a TELL foe should not have named the contest")
+	assert(m.fight["pick"] == 0)
+	m._cycle_contest(1)
+	assert(m.fight["pick"] == 1, "UP/DOWN did not move the highlight")
+	var chosen: int = m.games_left()[1]
+	m._commit()
+	assert(m.fight.is_empty() or m.fight["discard"] or m.fight["used"] == [chosen],
+			"SPACE committed a contest other than the highlighted one")
+	done["keys"] = true
 	m.free()
 
 

@@ -258,4 +258,3 @@ static func gen_foes(size: PackedInt32Array, count: int, rng: RandomNumberGenera
 		taken[c] = true
 		out.append(c)
 	return out
-

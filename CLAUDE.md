@@ -68,6 +68,8 @@ Godot **4.6.3** (Forward+, Jolt physics), binary at `~/.local/bin/godot`. No bui
 godot                                              # main scene: src/main/main.tscn
 godot --headless --script tests/test_board.gd      # lattice math asserts
 godot --headless --script tests/test_play.gd       # random play-throughs of the real scene
+godot --headless --script tests/test_fight.gd      # the contests, the stake, the cap, the boss
+godot --headless --script tests/test_run.gd        # the chaser and the climb
 godot --headless --script tests/odds.gd            # E[rolls] per board, solved not guessed
 
 # Scripts are interpreted, so a typo only surfaces when the scene loads. Check before
@@ -85,13 +87,17 @@ SNL_SEED=7 DISPLAY=:0 godot --position -6000,-6000 --script tests/shot.gd -- sho
 
 `shot.gd` args: output path, size, spread (`0` stacked / `1` exploded), `roll`, and an optional `yaw,pitch`. Screenshots go to `shots/`, which is gitignored.
 
-Controls: `SPACE` roll the picked die, number keys pick a move — or pick the die when no move is pending — `X` spend a reroll, **click a die to pick it up, click a spare to spend it**, `ESC` help overlay, `M` mute, `TAB` switch SPREAD/FOCUS, `D` cycle board dimensions, `C` recentre the camera, `F3` debug view, **`SHIFT+R` restart**, drag to orbit, right-drag to pan, wheel to zoom.
+Controls: `SPACE` **commit** — roll, reroll, or stake your die in a fight — **number keys pick a move and nothing else**, `LEFT`/`RIGHT` choose a die, `UP`/`DOWN` choose a contest, **click a die to pick it up, click a spare to spend it**, `ESC` help overlay, `M` mute, `TAB` switch SPREAD/FOCUS, `C` recentre the camera, `F3` debug view, `D` (behind `F3`) cycle board dimensions, **`SHIFT+R` restart the run**, drag to orbit, right-drag to pan, wheel to zoom.
 
 Restart is on `SHIFT+R` because a bare `R` sits beside every key you actually use, and mispressing it wipes the game you were playing.
 
+**`SPACE` means one thing: commit to what is in front of you.** No roll on the board, it throws one; a roll you cannot live with, it throws again and spends a token; mid-fight, it stakes the die you have highlighted; over the kit cap, it drops the die you have highlighted. There is no separate reroll key — a reroll *is* another throw, and `X` was a second word for one idea that nobody would have guessed.
+
+**The number keys are the board's, and only the board's.** They pick a move, never a die and never a contest — those are on the arrows. A key that means two things means neither when something is walking toward you.
+
 Pan exists because the fit frames the whole board: zoomed in on a big lattice there is otherwise no way to reach the corner being played in. It is an offset on top of the fitted pivot, so a refit keeps it; `C` flies it back to zero along with the orbit.
 
-`D` walks `Rules.SIZES` — `[6,6,6]` → `[4,4,4,4]` → `[3,3,3,3,3]` → `[10,10]`. Every dimension count has to be reachable from inside the game, not only by editing an export.
+`D` walks `Rules.SIZES` — `[6,6,6]` → `[4,4,4,4]` → `[3,3,3,3,3]` → `[10,10]` — and it is **debug-only, behind `F3`**. The floor is climbed now rather than chosen, but reaching a 5D fight by playing four floors first is no way to test one.
 
 2D is one plane with no deck to explode, so TAB only widens the spacing; it is the board everyone already knows. 5D draws and plays, and measures 0% ambiguous at both home angles, but nine decks of nine cells each leave the board small and sparse on screen — see the `_stack_offset` note about axes 4+ marching downward at a widening stride.
 
@@ -117,10 +123,11 @@ src/camera/cam_rig.gd            on CamRig: yaw, pitch, zoom, pan, the fit, the 
 src/ghost/ghosts.gd              on Ghosts: the numbered markers
 src/ghost/ghost.tscn             one marker, instanced per legal move
 src/hud/hud.gd                   on HUD: formats the text, changes no state
-src/dice/tray.gd                 on Tray: the dice and the spare rerolls, as objects
+src/dice/tray.gd                 on Tray: the dice, the spare rerolls and the foe's die, as objects
+src/game/minigames.gd            the contests a fight is decided by, one class each, static
 src/autoload/audio.gd            autoload `Audio`: every sound, synthesised, no files
 src/palette.gd                   every color in the game
-tests/                           test_board.gd, test_play.gd, odds.gd, test_readable.gd, shot.gd
+tests/                           test_board.gd, test_play.gd, test_fight.gd, test_run.gd, odds.gd, test_readable.gd, shot.gd
 ```
 
 Each script owns one node and its children. Nothing reaches up the tree for a
@@ -180,6 +187,34 @@ Pick a die, roll it for step size, then pick an axis and direction. A move that 
 **No d1.** With a d1 a forward move is legal from every cell but the goal, which deletes the endgame, the forfeits and every reroll. It is something to unlock, not to hand over at the start.
 
 **Rerolls are the only escape hatch.** A roll that traps you — nothing legal, one forced move, or nothing that gets closer to the goal — grants a spare die on the tray (`Rules.grants_reroll()`), which kicks as it arrives so the way out announces itself; clicking a spare, or `X`, spends one to roll again without spending a turn. Because the token arrives *on the roll that traps you*, you always hold one exactly when a losing move would otherwise be mandatory. That is the whole reason there is no separate "decline" option: it would be the same mechanism twice.
+
+**A die is a list of faces, not a face count.** `[1,2,3,4,5]` is a plain d5; a die won off a foe can be `[1,1,5,5]` (streaky) or `[3,3,3]` (certain). `Rules.die_faces()` still caps the *starting* die to `max(extent) - 1`, but foe dice are not capped — a foe never has to travel, and an oversized face is exactly what makes its die a mixed prize. `odds.gd` walks the face list, so every die stays measurable.
+
+### The run
+
+The game is a run now: **the floor number and the dimension count are the same number.** It opens on the 2D board with **one die**, and beating the floor's boss climbs to D+1 carrying the kit. It never ends; it stops when your last die is gone. `Rules.floor_size(d)` gives the board for a floor — `SIZES` for 2D–5D, then the smallest lattice that still has an interior.
+
+**The kit is one pool doing two jobs with opposite requirements.** The dice that move you are the dice you fight with, and `odds.gd` proves a big die travels badly while a big die is the best thing you can hold in BIGGER. `Rules.kit_cap()` is the dimension count, so ascending buys a slot and no configuration is good at everything.
+
+**Which starting die is measured, not chosen.** Alone on the opening board a d3 costs 11.61 rolls against a d6's 13.82, and on `[6,6,6]` a d3 costs 10.62 against a d5's 13.38, so `Rules.start_kit()` takes the smallest. `odds.gd` prints both columns and asserts it.
+
+**Fights are one contest, one roll each** — a beat inside the turn, not a mode you leave the board for. The boss takes two of three. **The die you commit is the die you stake:** lose and the foe takes that one, so the question is never only which die wins, but which die you can afford to lose. Win and its die is offered; over the cap, taking one means dropping one.
+
+`src/game/minigames.gd` holds the contests behind one interface — BIGGER (比大), SMALLER (比小), EVEN SUM (奇偶) — so 對子 or 吹牛 is a class and an entry in `ALL`. **Ties go to the foe.** `favours()` is the single place that says which die suits which contest, so the foe's own choice and any hint the HUD grows cannot disagree.
+
+A foe carries a **commit order**, which is the 分蛋糕 split — one side frames, the other chooses inside it. `OPEN` names the contest and leaves you the die; `TELL` shows its die and leaves you the contest. The two blind orders (commit first, learn after) are deliberately not built: they are only a bet once the player knows which die suits which contest.
+
+**The chaser is the clock.** Travel was free, so a floor was won by anyone patient enough. It steps one cell after **every roll, rerolls included** — which is what stops the escape hatch from being free time and makes the endgame stall against the far wall the most dangerous place on the board. It scales by its **dice, not its speed**: a two-step chaser cannot be anticipated in a projected 4D view, and a clock you cannot read is an ambush rather than pressure. It steps deterministically (furthest axis first, ties to the lowest), so it can be planned against.
+
+**The chaser is never dimmed.** It is the one thing on the board that ignores which plane is lit — it is a node rather than a line in the plane mesh, and `board_view.gd` draws its next-step arrow at full brightness too. The HUD carries `chaser N` in cells, because in a projected 4D view nobody can count that by eye.
+
+**Losing the boss is not a wall.** You are still standing on the goal, so it comes straight back and each attempt costs a die. That is how a weak kit bleeds out instead of being locked out of the game with nothing left to do — and it is why sprinting past every optional fight is not free.
+
+**A fight has to announce itself three ways.** A sting, the music swapping to the fight loop (`Audio.set_music()`, ducked rather than cut), and a ring thrown at the cell it happens on. Each round plays an opposite sound and an opposite-coloured ring, and the whole status line turns `C_FOE` for as long as the fight lasts. When it ends, `notice` carries what it cost or paid until the next roll — a fight that ends in silence leaves you looking at a tray with one fewer die on it and no idea why.
+
+The contest you are about to commit to is **shouted and bracketed** (`> SMALLER <`) while the rest go quiet and lowercase. A `Label` cannot colour one word of itself, and swapping it for a `RichTextLabel` to highlight three words is not worth the node.
+
+`carry_tokens` is a **playtest flag**: on, reroll tokens bank across floors, which may well trivialise every later endgame. That is the thing to watch, so it is a switch rather than a decision made in advance.
 
 ### Scene tree — `main.tscn`
 

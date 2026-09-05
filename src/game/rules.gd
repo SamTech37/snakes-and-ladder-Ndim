@@ -108,6 +108,27 @@ static func kit_cap(size: PackedInt32Array) -> int:
 	return size.size()
 
 
+## The board for floor `d`. The run is a climb through dimension counts, so the floor number and the dimension count are the same number. The first four come out of SIZES, which odds.gd and the screenshot harness already measure; past 5D nothing has been looked at, so they are the smallest lattice that still has an interior.
+static func floor_size(d: int) -> PackedInt32Array:
+	for s in SIZES:
+		if s.size() == d:
+			return s
+	var out := PackedInt32Array()
+	for _i in maxi(2, d):
+		out.append(3)
+	return out
+
+
+## What you set out with: one die. Room to carry more is what ascending buys, so floor one is about using what you have rather than choosing between things.
+## The smallest die, and that is measured rather than chosen by taste: alone on the opening board a d3 costs 11.61 rolls against a d6's 13.82, and on [6,6,6] a d3 costs 10.62 against a d5's 13.38. Big faces are dead weight against the far wall, and a lone die has nothing to hide behind. tests/odds.gd prints both columns and asserts this one is the cheaper.
+static func start_kit(size: PackedInt32Array) -> Array[PackedInt32Array]:
+	var best := kit(size)[0]
+	for faces in kit(size):
+		if faces.size() < best.size():
+			best = faces
+	return [best]
+
+
 ## How much a foe tells you before you commit. The 分蛋糕 split: one side frames the contest, the other picks inside it. OPEN -- it names the game, you choose which die to stake. TELL -- it shows its die, you choose which game to hold it in. ponytail: the two blind orders (commit first, learn after) are deliberately not here yet -- they are only a bet once the player knows which die suits which contest.
 enum { OPEN, TELL }
 
@@ -130,8 +151,8 @@ static var BOSS_DICE: Array[PackedInt32Array] = [
 
 
 ## A foe as plain data: its die, the contests it knows, and how much it tells you. A Dictionary rather than a class for the same reason `links` is one -- it is data the turn loop passes around, and nothing about it needs behaviour of its own.
-static func make_foe(rng: RandomNumberGenerator, boss := false) -> Dictionary:
-	var pool := BOSS_DICE if boss else FOE_DICE
+static func make_foe(rng: RandomNumberGenerator, boss := false, strong := false) -> Dictionary:
+	var pool := BOSS_DICE if boss or strong else FOE_DICE
 	var games: Array[int] = [0, 1, 2]
 	if not boss:
 		# A floor foe knows two of the three, so which contest it can reach for is part of what you read off it.

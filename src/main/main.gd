@@ -13,7 +13,14 @@ const MG = preload("res://src/game/minigames.gd")
 
 enum View { SPREAD, FOCUS }
 
-@export var size := PackedInt32Array([6, 6, 6])
+## How far behind you the chaser is put at the start of a floor, and again after every fight with it. Cells, not turns: it walks one cell per roll, so this is also roughly how many rolls of grace you get.
+const HEAD_START := 5
+
+## The chaser is not standing on any cell in `foes` -- it carries its cell with it -- so a fight with it is marked with this instead of an index.
+const ROAMER_CELL := -2
+
+## The floor you are standing on. Dimension count and floor number are the same thing: the run opens on the 2D board everybody already knows and climbs from there.
+@export var size := PackedInt32Array([10, 10])
 @export var link_count := 18
 ## Manhattan cap on a link's reach. Uncapped endpoints gave full-width lines that
 ## crossed everything and skipped most of the board in one move.
@@ -22,6 +29,10 @@ enum View { SPREAD, FOCUS }
 @export var foe_count := 5
 ## The boss on the goal cell. Off means reaching the goal wins outright.
 @export var boss_fight := true
+## The chaser. It is the clock: travel is otherwise free, and a floor with no clock is won by anyone patient enough.
+@export var roamer_on := true
+## Whether reroll tokens survive a floor. On, a stockpile carries into every later floor and may well trivialise the endgame stall -- which is exactly the thing to watch, so it is a flag to play both ways rather than a decision made in advance.
+@export var carry_tokens := true
 ## Off makes every hop instant, so test_play.gd can run games without waiting on tweens.
 @export var anim := true
 
@@ -29,6 +40,7 @@ enum View { SPREAD, FOCUS }
 @onready var view3d: Node3D = $Board
 @onready var ghosts: Node3D = $Ghosts
 @onready var player: MeshInstance3D = $Player
+@onready var roamer_node: MeshInstance3D = $Roamer
 @onready var hud: CanvasLayer = $HUD
 @onready var tray: Node3D = $CamRig/Camera3D/Tray
 
@@ -46,6 +58,16 @@ var fight := {}
 
 ## No dice left. The run is over -- there is nothing to roll and nothing to stake.
 var dead := false
+
+## The chaser's cell, and the foe it fights as. It steps one cell after every roll, rerolls included, so the escape hatch costs distance and the endgame stall against the far wall is the most dangerous place on the board rather than merely the slowest.
+var roamer := PackedInt32Array()
+var roamer_foe := {}
+
+## What just happened, in words, until the next roll. A fight that ends in silence leaves you looking at a tray with one fewer die on it and no idea why.
+var notice := ""
+
+## Floors cleared this run. The board says which dimension you are on; this says how far you got, which is the only score there is.
+var floors := 0
 
 var roll := 0
 var moves := []
@@ -98,7 +120,8 @@ func _ready() -> void:
 	new_game()
 
 
-func new_game() -> void:
+## Deals a floor. `keep` carries the run across it: the kit is what a run *is*, so ascending must not re-deal it, while SHIFT+R must.
+func new_game(keep := false) -> void:
 	coords = Board.index_to_coords(0, size)
 	links = Board.gen_links(size, link_count, rng, link_span)
 	foes = {}
@@ -107,15 +130,23 @@ func new_game() -> void:
 	boss = Rules.make_foe(rng, true) if boss_fight else {}
 	fight = {}
 	dead = false
+	notice = ""
+	Audio.set_music("calm")
 	tray.clear_foe()
 	turns = 0
 	roll = 0
 	moves = []
 	won = false
 	busy = false
-	rerolls = 0
-	kit = Rules.kit(size)
+	if not keep:
+		floors = 0
+		kit = Rules.start_kit(size)
+	if not (keep and carry_tokens):
+		rerolls = 0
 	die_index = mini(die_index, kit.size() - 1)
+	# The chaser scales by its dice rather than its speed: a two-step chaser cannot be anticipated in a projected 4D view, and a clock you cannot read is an ambush rather than pressure.
+	roamer_foe = Rules.make_foe(rng, false, size.size() >= 4)
+	_reset_roamer()
 	rig.pan = Vector2.ZERO
 	view3d.size = size
 	player.position = view3d.world(coords)
@@ -126,9 +157,19 @@ func new_game() -> void:
 	_refresh_hud()
 
 
+## Beating the boss is not the end of anything but the floor. The run climbs a dimension, keeps the kit it fought for, and deals again.
+func _ascend() -> void:
+	floors += 1
+	Audio.play("win")
+	view3d.win_burst()
+	size = Rules.floor_size(size.size() + 1)
+	new_game(true)
+
+
 ## Board and markers follow the game state; called whenever either changes.
 func _redraw() -> void:
 	view3d.sync(coords, links, moves, foes)
+	view3d.set_roamer(roamer, _roamer_next())
 
 
 func _refresh_hud() -> void:
@@ -137,6 +178,7 @@ func _refresh_hud() -> void:
 		"roll": roll, "turns": turns, "won": won,
 		"kit": kit, "die_index": die_index,
 		"rerolls": rerolls, "foes": foes, "fight": fight, "dead": dead,
+		"roamer": roamer, "floors": floors, "notice": notice,
 		"mode": "SPREAD" if view == View.SPREAD else "FOCUS",
 	})
 
@@ -158,11 +200,83 @@ func throw(faces: PackedInt32Array) -> int:
 	return faces[rng.randi_range(0, faces.size() - 1)]
 
 
+## How far the chaser has to walk to reach you, in cells. On screen in the status line, because in a projected 4D view this cannot be counted by eye.
+func roamer_dist() -> int:
+	if roamer.is_empty():
+		return -1
+	return Board.manhattan(coords, roamer)
+
+
+## Where the chaser steps next: the axis it is furthest from you on, ties to the lowest axis. Deterministic on purpose -- it is a clock, and a clock you can read is pressure while one you cannot is an ambush.
+func _roamer_next() -> PackedInt32Array:
+	if roamer.is_empty() or roamer == coords:
+		return PackedInt32Array()
+	var axis := -1
+	var delta := 0
+	for k in size.size():
+		var d: int = coords[k] - roamer[k]
+		if absi(d) > absi(delta):
+			delta = d
+			axis = k
+	if axis < 0:
+		return PackedInt32Array()
+	var dest := roamer.duplicate()
+	dest[axis] += signi(delta)
+	return dest
+
+
+## One step, after every roll -- a spent reroll moves it too, which is what stops the token from being free time.
+func _step_roamer() -> void:
+	if roamer.is_empty() or won or dead or not fight.is_empty():
+		return
+	var dest := _roamer_next()
+	if dest.is_empty():
+		return
+	roamer = dest
+	_place_roamer(true)
+	if roamer == coords:
+		# Caught. It picks the fight, which is the half of a fight you normally choose.
+		_start_fight(roamer_foe, ROAMER_CELL)
+
+
+## Puts it back at arm's length after a fight. Without this it stands on you and picks a fight on every roll from here to the goal.
+func _reset_roamer() -> void:
+	if not roamer_on:
+		roamer = PackedInt32Array()
+		roamer_node.visible = false
+		return
+	# Along the axis with the most room behind you, so it starts where you have already been rather than between you and the goal.
+	var axis := 0
+	for k in size.size():
+		if coords[k] > coords[axis]:
+			axis = k
+	roamer = coords.duplicate()
+	roamer[axis] = maxi(0, coords[axis] - HEAD_START)
+	if roamer == coords:
+		roamer[axis] = mini(size[axis] - 1, coords[axis] + HEAD_START)
+	roamer_node.visible = true
+	_place_roamer(false)
+
+
+## Tweened like everything else. It is not awaited: the chaser moving while you are reading the board is the point, and blocking the turn on its hop would make every roll feel slower than it is.
+func _place_roamer(animate: bool) -> void:
+	if roamer.is_empty():
+		return
+	var to: Vector3 = view3d.world(roamer)
+	if not anim or not animate:
+		roamer_node.position = to
+		return
+	var t := create_tween()
+	t.tween_property(roamer_node, "position", to, 0.3) \
+		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
+
+
 ## Layout, camera and everything sitting on the board move together, so the deck
 ## visibly explodes instead of cutting between two arrangements.
 func set_spread(s: float) -> void:
 	view3d.spread = s
 	player.position = view3d.world(coords)
+	_place_roamer(false)
 	view3d.redraw()
 	rig.fit()
 	ghosts.place()
@@ -233,6 +347,7 @@ func reroll() -> void:
 
 
 func _roll(spend_turn: bool) -> void:
+	notice = ""
 	roll = throw(die())
 	if spend_turn:
 		turns += 1
@@ -249,6 +364,8 @@ func _roll(spend_turn: bool) -> void:
 	if trapped:
 		tray.flash_spares()
 	ghosts.show_moves(moves, links, foes)
+	# After the roll, not after the turn: a reroll is a roll, so the escape hatch costs a cell of distance. The markers stay up through a catch -- being caught takes a die, not the move you were about to make.
+	_step_roamer()
 	_redraw()
 	_refresh_hud()
 
@@ -309,7 +426,10 @@ func choose(i: int) -> void:
 	_redraw()
 	busy = false
 	var at := Board.coords_to_index(coords, size)
-	if foes.has(at):
+	if coords == roamer:
+		# You can walk into it as easily as it walks into you.
+		_start_fight(roamer_foe, ROAMER_CELL)
+	elif foes.has(at):
 		_start_fight(foes[at], at)
 	elif Board.dist_to_goal(coords, size) == 0:
 		# The goal is where the boss stands. Reaching it is arriving at the fight, not winning -- otherwise the floor could be sprinted past for free.
@@ -330,8 +450,12 @@ func _win() -> void:
 ##
 ## **The die you stake is the die you commit.** Lose and the foe takes that one, so the question is never only which die wins the contest: it is also which die you can afford to lose. `cell` is the foe's cell, or -1 for the boss, which stands on the goal and is not in `foes`.
 func _start_fight(foe: Dictionary, cell: int) -> void:
-	Audio.play("snake")
-	fight = {"foe": foe, "cell": cell, "game": -1, "wins": 0, "losses": 0,
+	# Three ways at once, because a fight that only changes a line of text is a fight nobody notices starting: a sting, the music, and a ring thrown at the cell it happens on.
+	Audio.play("fight")
+	Audio.set_music("fight")
+	view3d.fight_flash(coords)
+	notice = ""
+	fight = {"foe": foe, "cell": cell, "game": -1, "pick": 0, "wins": 0, "losses": 0,
 			"used": [], "discard": false, "last": ""}
 	tray.set_foe(foe["faces"])
 	_next_round()
@@ -341,6 +465,7 @@ func _start_fight(foe: Dictionary, cell: int) -> void:
 func _next_round() -> void:
 	var foe: Dictionary = fight["foe"]
 	fight["game"] = _foe_picks(foe) if foe["trait"] == Rules.OPEN else -1
+	fight["pick"] = 0
 	_refresh_hud()
 
 
@@ -365,22 +490,14 @@ func games_left() -> Array:
 	return out
 
 
-## A number key inside a fight: which contest, if the foe left that open, otherwise which die to stake.
-func _fight_key(i: int) -> void:
-	if fight["discard"]:
-		_discard(i)
-		return
-	if fight["game"] >= 0:
-		_pick_die(i)
-		return
-	var left := games_left()
-	if i < left.size():
-		fight["game"] = left[i]
-		_resolve()
-
-
 func _resolve() -> void:
 	var foe: Dictionary = fight["foe"]
+	if fight["game"] < 0:
+		# TELL: the contest is whichever one is highlighted when SPACE lands.
+		var left := games_left()
+		if left.is_empty():
+			return
+		fight["game"] = left[mini(fight["pick"], left.size() - 1)]
 	var g: int = fight["game"]
 	fight["used"].append(g)
 	var mine := throw(die())
@@ -388,7 +505,10 @@ func _resolve() -> void:
 	tray.roll_to(mine)
 	tray.roll_foe(theirs)
 	var win: bool = MG.ALL[g].play(mine, theirs)
-	fight["last"] = "%d v %d  %s" % [mine, theirs, "WON" if win else "LOST"]
+	fight["last"] = "%s  %d v %d  %s" % [MG.ALL[g].label(), mine, theirs, "WON" if win else "LOST"]
+	# Opposite sounds and opposite colours: which way a round went should not have to be read.
+	Audio.play("gain" if win else "loss")
+	view3d.result_flash(coords, win)
 	if win:
 		fight["wins"] += 1
 	else:
@@ -407,9 +527,13 @@ func _resolve() -> void:
 func _fight_won() -> void:
 	var foe: Dictionary = fight["foe"]
 	Audio.play("ladder")
+	notice = "WON the fight  -  took %s" % Rules.die_name(foe["faces"])
 	if foe["boss"]:
 		_end_fight()
-		_win()
+		if boss_fight:
+			_ascend()
+		else:
+			_win()
 		return
 	foes.erase(fight["cell"])
 	kit.append(foe["faces"])
@@ -424,6 +548,7 @@ func _fight_won() -> void:
 func _fight_lost() -> void:
 	var foe: Dictionary = fight["foe"]
 	Audio.play("snake")
+	notice = "LOST the fight  -  %s gone" % Rules.die_name(die())
 	foes.erase(fight["cell"])
 	_lose_die(die_index)
 	if dead:
@@ -445,6 +570,7 @@ func _lose_die(i: int) -> void:
 func _discard(i: int) -> void:
 	if i >= kit.size():
 		return
+	notice = "dropped %s" % Rules.die_name(kit[i])
 	kit.remove_at(i)
 	die_index = clampi(die_index, 0, kit.size() - 1)
 	Audio.play("pick")
@@ -452,7 +578,12 @@ func _discard(i: int) -> void:
 
 
 func _end_fight() -> void:
+	Audio.set_music("calm")
+	# Whatever the outcome, the chaser backs off. Left standing on you it would pick a fight on every roll from here to the goal, which is a stalemate rather than a clock.
+	var was_roamer: bool = fight.get("cell", 0) == ROAMER_CELL
 	fight = {}
+	if was_roamer:
+		_reset_roamer()
 	tray.clear_foe()
 	_refresh_tray()
 	_refresh_hud()
@@ -531,7 +662,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			# the parked angle so the reset is not undone on the next trip through TAB.
 			parked.erase(view)
 			rig.fly_to(_view_angle(view))
-		elif event.keycode == KEY_D:
+		elif event.keycode == KEY_D and view3d.debug:
+			# Debug only, behind F3. The floor is climbed now, not chosen -- but reaching a 5D fight by playing four floors first is no way to test one.
 			_cycle_size()
 		elif event.keycode == KEY_F3:
 			view3d.debug = not view3d.debug
@@ -540,23 +672,54 @@ func _unhandled_input(event: InputEvent) -> void:
 		elif busy or won or dead:
 			return
 		elif event.is_action_pressed("ui_accept"):
-			# Same key, one meaning: throw. Mid-fight it throws the die you have picked against the foe's, once the contest is known.
-			if not fight.is_empty():
-				if fight["game"] >= 0 and not fight["discard"]:
-					_resolve()
-			elif moves.is_empty():
-				do_roll()
+			_commit()
+		elif event.is_action_pressed("ui_left"):
+			_cycle_die(-1)
+		elif event.is_action_pressed("ui_right"):
+			_cycle_die(1)
+		elif event.is_action_pressed("ui_up"):
+			_cycle_contest(-1)
+		elif event.is_action_pressed("ui_down"):
+			_cycle_contest(1)
 		elif event.keycode == KEY_M:
 			Audio.toggle_mute()
-		elif event.keycode == KEY_X:
-			reroll()
 		elif event.keycode >= KEY_1 and event.keycode <= KEY_9:
-			# Same keys, disjoint states: a fight means they are choosing a contest, a die to stake or a die to drop; markers on the board mean they are choosing a move; neither means they are choosing the next die.
-			if not fight.is_empty():
-				_fight_key(event.keycode - KEY_1)
-			elif moves.is_empty():
-				_pick_die(event.keycode - KEY_1)
-			else:
-				choose(event.keycode - KEY_1)
+			# The number keys are the board's, and only the board's. Choosing a die, a contest or a die to drop is on the arrow keys, because a key that means two things means neither when you are being chased.
+			choose(event.keycode - KEY_1)
 		elif event.keycode == KEY_0:
 			choose(9)
+
+
+## SPACE, and it always means the same thing: commit to what is in front of you. No roll on the board, throw one; a roll you cannot live with, throw it again for a token; mid-fight, stake the die against the foe's; over the cap, drop the die you have highlighted.
+##
+## There is no separate reroll key. A reroll *is* another throw, so it is the same key -- X was a second word for one idea, and one nobody would have guessed.
+func _commit() -> void:
+	if not fight.is_empty():
+		if fight["discard"]:
+			_discard(die_index)
+		else:
+			_resolve()
+		return
+	if roll == 0:
+		do_roll()
+	else:
+		reroll()
+
+
+## LEFT/RIGHT walk the kit: which die you are about to throw, which die you are staking, which die you are about to drop. Same key, one idea, in all three.
+func _cycle_die(step: int) -> void:
+	if kit.size() < 2 or (not fight.is_empty() and fight["game"] < 0 and not fight["discard"]):
+		return
+	_pick_die(posmod(die_index + step, kit.size()))
+
+
+## UP/DOWN walk the contests a foe has left, when the foe is the one who showed its die first and left the naming to you.
+func _cycle_contest(step: int) -> void:
+	if fight.is_empty() or fight["discard"] or fight["game"] >= 0:
+		return
+	var left := games_left()
+	if left.size() < 2:
+		return
+	fight["pick"] = posmod(fight.get("pick", 0) + step, left.size())
+	Audio.play("pick")
+	_refresh_hud()

@@ -1,4 +1,4 @@
-[gd_scene load_steps=21 format=3]
+[gd_scene load_steps=23 format=3]
 
 [ext_resource type="Script" path="res://src/main/main.gd" id="1_main"]
 [ext_resource type="PackedScene" path="res://src/ghost/ghost.tscn" id="2_ghost"]
@@ -68,6 +68,17 @@ radius = 0.26
 height = 0.52
 radial_segments = 12
 rings = 6
+
+[sub_resource type="StandardMaterial3D" id="Mat_roamer"]
+shading_mode = 0
+albedo_color = Color(1, 0.36, 0.16, 1)
+
+[sub_resource type="SphereMesh" id="Mesh_roamer"]
+material = SubResource("Mat_roamer")
+radius = 0.3
+height = 0.6
+radial_segments = 3
+rings = 2
 
 [sub_resource type="SystemFont" id="Font_mono"]
 font_names = PackedStringArray("JetBrains Mono", "DejaVu Sans Mono", "Liberation Mono", "monospace")
@@ -159,6 +170,10 @@ ghost_scene = ExtResource("2_ghost")
 [node name="Player" type="MeshInstance3D" parent="."]
 mesh = SubResource("Mesh_player")
 
+[node name="Roamer" type="MeshInstance3D" parent="."]
+visible = false
+mesh = SubResource("Mesh_roamer")
+
 [node name="HUD" type="CanvasLayer" parent="."]
 script = ExtResource("6_hud")
 
@@ -212,7 +227,9 @@ theme_override_styles/normal = SubResource("Box_hud")
 theme_override_font_sizes/font_size = 16
 text = "marker   cube plain   cone up LADDER   cone down SNAKE   diamond GOAL
          a link's marker draws a line to where it drags you
-tray     the bright die is the one you roll; the small ones are rerolls"
+tray     the bright die is the one you roll; the small ones are rerolls
+         the foe's die sits on the far side of the screen during a fight
+fight    one contest, one roll each — the die you stake is the one you lose"
 
 [node name="Controls" type="Label" parent="HUD/Margin/Rows/Help"]
 layout_mode = 2
@@ -220,8 +237,10 @@ theme_override_colors/font_color = Color(0.62, 0.66, 0.85, 1)
 theme_override_fonts/font = SubResource("Font_mono")
 theme_override_styles/normal = SubResource("Box_hud")
 theme_override_font_sizes/font_size = 16
-text = "SPACE     roll the die you picked      click a die   pick it up
-number    pick a move                   click a spare  spend it
-TAB view    D dimensions   C recentre   M mute   F3 debug
-SHIFT+R restart            ESC close this
+text = "SPACE     throw: roll, reroll, or stake a die in a fight
+number    pick a move on the board — the board's keys, only
+LEFT/RIGHT   choose a die      UP/DOWN   choose a contest
+click a die pick it up         click a spare  spend it
+TAB view    C recentre   M mute   F3 debug (then D dimensions)
+SHIFT+R restart the run        ESC close this
 drag orbit    right-drag pan    wheel zoom"

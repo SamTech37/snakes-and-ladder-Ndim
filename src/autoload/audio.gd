@@ -22,6 +22,12 @@ var next_voice := 0
 var music: AudioStreamPlayer
 var muted := false
 
+## name -> looping AudioStream. Swapped by set_music().
+var tracks := {}
+var track := "calm"
+
+const MUSIC_DB := -20.0
+
 
 func _ready() -> void:
 	# Fast attack, hard decay: a flat-vector board should not have soft edges.
@@ -35,6 +41,11 @@ func _ready() -> void:
 		"snake": _tone(700.0, 150.0, 0.38, "saw", 0.006),
 		"token": _tone(880.0, 1400.0, 0.16, "square", 0.01),
 		"win": _chord([523.25, 659.25, 784.0], 1.1),
+		# A fight has to announce itself. Falling and dissonant, because unlike a roll this is something arriving at you rather than something you did.
+		"fight": _tone(180.0, 520.0, 0.45, "saw", 0.02),
+		# One round of a contest, won or lost. Short and opposite: nobody should have to read the line to know which way it went.
+		"gain": _tone(600.0, 1200.0, 0.2, "square", 0.006),
+		"loss": _tone(500.0, 120.0, 0.3, "saw", 0.012),
 	}
 	for i in 5:
 		var p := AudioStreamPlayer.new()
@@ -42,9 +53,11 @@ func _ready() -> void:
 		add_child(p)
 		voices.append(p)
 
+	# Two tracks, one player. The music is the loudest thing that can say a fight is on, and it costs one more generated buffer.
+	tracks = {"calm": _music(), "fight": _music_fight()}
 	music = AudioStreamPlayer.new()
-	music.volume_db = -20.0
-	music.stream = _music()
+	music.volume_db = MUSIC_DB
+	music.stream = tracks["calm"]
 	add_child(music)
 	music.play()
 
@@ -56,6 +69,19 @@ func play(sound: String) -> void:
 	next_voice = (next_voice + 1) % voices.size()
 	p.stream = bank[sound]
 	p.play()
+
+
+## Swaps the loop. Ducked down and back up rather than cut, for the same reason nothing else in the game cuts: a track that changes between one frame and the next reads as a glitch rather than as the fight starting.
+func set_music(kind: String) -> void:
+	if kind == track or not tracks.has(kind):
+		return
+	track = kind
+	var t := create_tween()
+	t.tween_property(music, "volume_db", -60.0, 0.2)
+	t.tween_callback(func():
+			music.stream = tracks[kind]
+			music.play())
+	t.tween_property(music, "volume_db", MUSIC_DB, 0.3)
 
 
 ## M. Silence is a setting, not a reason to skip building the sound.
@@ -135,6 +161,34 @@ func _music() -> AudioStream:
 		var pad := (_wave(p1, "saw") + _wave(p2, "saw")) * 0.5
 		var arp := _wave(pa, "square") * pow(1.0 - u, 3.0)
 		data.encode_s16(i * 2, int(clampf(pad * 0.5 + arp * 0.35, -1.0, 1.0) * 32767.0))
+	var w := _wav(data)
+	w.loop_mode = AudioStreamWAV.LOOP_FORWARD
+	w.loop_end = n - 1
+	return w
+
+
+## The fight loop: the same two detuned saws, a semitone-clashing fifth above them, and the arpeggio at double speed. Same instrument, more pressure -- a different band playing would say the game changed, and it has not, only the moment.
+func _music_fight() -> AudioStream:
+	var roots := [110.0, 116.54, 103.83, 110.0]  # A2  A#2  G#2  A2
+	var bar := 1.0
+	var n := int(RATE * bar * roots.size())
+	var data := PackedByteArray()
+	data.resize(n * 2)
+	var p1 := 0.0
+	var p2 := 0.0
+	var pa := 0.0
+	for i in n:
+		var t := float(i) / RATE
+		var root: float = roots[int(t / bar) % roots.size()]
+		p1 += root / RATE
+		p2 += root * 1.012 / RATE
+		var step := int(t * 8.0) % 4
+		var mult: float = [1.0, 1.5, 2.0, 1.5][step]
+		pa += root * mult * 2.0 / RATE
+		var u := fmod(t * 8.0, 1.0)
+		var pad := (_wave(p1, "saw") + _wave(p2, "saw")) * 0.5
+		var arp := _wave(pa, "square") * pow(1.0 - u, 3.0)
+		data.encode_s16(i * 2, int(clampf(pad * 0.5 + arp * 0.4, -1.0, 1.0) * 32767.0))
 	var w := _wav(data)
 	w.loop_mode = AudioStreamWAV.LOOP_FORWARD
 	w.loop_end = n - 1

@@ -1,5 +1,40 @@
 # Worklog
 
+## 2026-09-05 — the run (`feat/roguelike`, 3 commits)
+
+Design interview first: `.claude/roguelike-dice-run-spec.md`. TODO items 2 and 4 are built; item 3 is deliberately still uniform sampling.
+
+### Done
+
+**A die is a list of faces.** `6` became `[1,2,3,4,5,6]`, so a die won off a foe can be `[1,1,5,5]` (streaky) or `[3,3,3]` (certain) and roll through the same code. The kit stopped being derived from `size` and became run state. `odds.gd` walks the list and prints the same numbers it printed before — 8.59 / 9.57 / 8.09 / 8.87 — which is the proof the refactor changed nothing.
+
+**Fights.** A foe stands on a cell, a boss on the goal. One contest, one roll each; the boss takes two of three. **The die you commit is the die you stake** — lose and the foe takes that one, so the question is never only which die wins. `src/game/minigames.gd` holds BIGGER / SMALLER / EVEN SUM behind one interface; ties go to the foe. A foe either names the contest and leaves you the die (`OPEN`) or shows its die and leaves you the contest (`TELL`) — the 分蛋糕 split.
+
+**The kit cap is the dimension count.** Winning a die over the cap means dropping one, so the kit's shape is bounded even when your luck is not. One pool: the dice that move you are the dice you fight with, and `odds.gd` already proves a big die travels badly while a big die is the best thing to hold in BIGGER.
+
+**The chaser.** Travel was free, so a floor was won by anyone patient enough. It steps one cell after **every roll, rerolls included**. It never dims, it draws the step it is about to take, and the HUD carries `chaser N` in cells. It scales by its dice, not its speed.
+
+**The climb.** Floor number and dimension count are the same number. The run opens on 2D with **one die** — measured, not chosen: alone, a d3 costs 11.61 rolls against a d6's 13.82, and `odds.gd` now asserts it. Beating the boss climbs to D+1 with the kit intact. Losing the boss costs a die and it comes straight back, so a weak kit bleeds out rather than getting locked out. The run ends when the last die is gone.
+
+**Input, separated.** `SPACE` means one thing — commit: roll, reroll, stake, or drop. The number keys are the board's and only the board's; dice and contests moved to the arrows. `X` is gone: a reroll *is* another throw.
+
+**A fight announces itself three ways** — a sting, the music swapping to a fight loop, and a ring on the cell. Each round plays an opposite sound and an opposite-coloured ring; the status line turns foe-orange for the duration; `notice` says what the fight cost or paid until the next roll.
+
+### Verified
+
+`test_board`, `test_play` (foes and chaser off — it is the liveness check), `test_fight` (contests on hand-built rolls, stake, cap, boss, run over, the key map), `test_run` (the chase closes and keeps its promise, a reroll advances it, a catch starts a fight, the climb keeps the kit, `carry_tokens` both ways), `odds` unchanged, `test_readable` 0.0% at both home angles with the chaser and foes drawn.
+
+**A failed `assert` does not fail a `--script` run** — it prints, abandons the function it is in, and the process still exits 0. `test_fight` and `test_run` sign each check off and exit 1 on a missing signature; `test_board` and `test_play` still rely on the old assumption.
+
+Not verified: nobody has played a full run by hand.
+
+### Next
+
+1. **Playtest.** Catch frequency, whether banked tokens dominate (`carry_tokens` is the flag), whether three contests are enough, and which of foe / chaser / boss to cut.
+2. **The blind commit orders** (i) and (ii) — commit first, learn after. Only a bet once the vocabulary exists.
+3. **Procedural generation** (job iii). Still uniform rejection sampling: no difficulty curve, no guarantee a snake is reachable, foes placed by the same blunt sampler.
+4. **4D decks still look identical**, and the reference art in `ideas/` is still unused.
+
 ## 2026-09-05 — playability (`feat/playable`, 6 commits)
 
 ### Done

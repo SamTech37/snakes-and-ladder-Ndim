@@ -27,11 +27,24 @@ const TARGET := Vector2(4.0, 16.0)
 
 
 func _initialize() -> void:
-	print("\n%-16s %6s %10s %10s" % ["board", "kit", "E[rolls]", "floor"])
+	print("\n%-16s %8s %10s %10s   %s" % ["board", "kit", "E[rolls]", "floor", "each die alone"])
 	for size in Rules.SIZES:
-		var e := _solve(size)
-		var names := Array(Rules.kit(size)).map(func(f): return Rules.die_name(f))
-		print("%-16s %6s %10.2f %10.2f" % [str(size), " ".join(names), e, _floor(size)])
+		var kit := Rules.kit(size)
+		var e := _solve(size, kit)
+		var names := Array(kit).map(func(f): return Rules.die_name(f))
+		# Each die on its own as well as the kit, because a run starts holding exactly one of them and Rules.start_kit() takes the first -- which is a claim this line has to keep honest.
+		var alone := PackedStringArray()
+		var start := _solve(size, Rules.start_kit(size))
+		for faces in kit:
+			var one: Array[PackedInt32Array] = [faces]
+			var cost := _solve(size, one)
+			alone.append("%s %.2f" % [Rules.die_name(faces), cost])
+			assert(start <= cost + 1e-9,
+					"%s starts on %s at %.2f rolls when %s costs only %.2f"
+					% [str(size), Rules.die_name(Rules.start_kit(size)[0]), start,
+					Rules.die_name(faces), cost])
+		print("%-16s %8s %10.2f %10.2f   %s"
+				% [str(size), " ".join(names), e, _floor(size), "  ".join(alone)])
 		if size == Rules.SIZES[0]:
 			assert(e >= TARGET.x and e <= TARGET.y,
 					"%s takes %.1f rolls, outside the %.0f-%.0f the game is tuned for"
@@ -54,7 +67,7 @@ func _floor(size: PackedInt32Array) -> float:
 
 ## Gauss-Seidel until it stops moving. Sweeping from the cells nearest the goal
 ## outward means most states are solved in the first pass.
-func _solve(size: PackedInt32Array) -> float:
+func _solve(size: PackedInt32Array, kit: Array[PackedInt32Array]) -> float:
 	var n := Board.total_cells(size)
 	var goal := n - 1
 	var v := PackedFloat64Array()
@@ -67,7 +80,6 @@ func _solve(size: PackedInt32Array) -> float:
 	var order := range(n)
 	order.sort_custom(func(a, b): return dist[a] < dist[b])
 
-	var kit := Rules.kit(size)
 	for _pass in 500:
 		var delta := 0.0
 		for i in order:

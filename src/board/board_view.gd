@@ -57,6 +57,10 @@ var moves := []
 ## cell index -> foe. Drawn on the board and not only on the markers: steering around a fight is a real move, and you cannot steer around something you can only see once it is already one step away.
 var foes := {}
 
+## The chaser's cell and the cell it steps to next. The chaser itself is a node (Main/Roamer), so it is **never dimmed** -- the one thing on the board that ignores which plane is lit, because it is the clock and a clock you have to hunt for is not one. This pair only draws the hint line that says which way it is about to go.
+var roamer := PackedInt32Array()
+var roamer_next := PackedInt32Array()
+
 
 func world(c: PackedInt32Array) -> Vector3:
 	return Board.coords_to_world(c, size, spread)
@@ -124,6 +128,7 @@ func redraw() -> void:
 
 	_goal_beacon(im, world(Board.goal_coords(size)))
 	_draw_foes(im, lit)
+	_draw_roamer(im)
 	_preview_links(im)
 	_draw_fx(im)
 	if debug:
@@ -157,6 +162,25 @@ func _goal_beacon(im: ImmediateMesh, at: Vector3) -> void:
 		_line(im, at + v * r * 0.5, at + v * (h + 0.35), Pal.C_GOAL)
 
 
+func set_roamer(at: PackedInt32Array, next: PackedInt32Array) -> void:
+	roamer = at
+	roamer_next = next
+
+
+## Where the chaser is about to step, drawn from it toward that cell. It moves deterministically, so this is a promise rather than a guess -- and it is what makes the chase something to plan against instead of something that happens to you. Full brightness whatever plane it is on, like the chaser itself.
+func _draw_roamer(im: ImmediateMesh) -> void:
+	if roamer.is_empty() or roamer_next.is_empty():
+		return
+	var from := world(roamer)
+	var to := world(roamer_next)
+	var dir := (to - from).normalized()
+	var tip := from + dir * minf(0.9, from.distance_to(to) * 0.6)
+	_line(im, from, tip, Pal.C_FOE)
+	var side: Vector3 = rig.perp(dir) * 0.16
+	_line(im, tip, tip - dir * 0.25 + side, Pal.C_FOE)
+	_line(im, tip, tip - dir * 0.25 - side, Pal.C_FOE)
+
+
 ## Every foe on the board, all the time -- not only the ones a marker is standing on. Deciding to walk the long way round a fight needs the fight to be visible from further off than one roll.
 ##
 ## A four-pointed star lying in the plane: the same silhouette the FOE marker carries, small enough that a cell holding one still reads as a cell.
@@ -176,6 +200,16 @@ func _draw_foes(im: ImmediateMesh, lit: Dictionary) -> void:
 ## that opens and fades where the player came down.
 func land_flash(c: PackedInt32Array) -> void:
 	_flash(c, Pal.C_HERE, "ring", 0.45)
+
+
+## A fight starting is an event on a cell, so the cell says so -- the same ring a landing throws, in the foe's colour and wider, because this one is not a move you made.
+func fight_flash(c: PackedInt32Array) -> void:
+	_flash(c, Pal.C_FOE, "ring", 0.55)
+
+
+## One round of a contest, won or lost, in the colour that already means gained or lost everywhere else on this board.
+func result_flash(c: PackedInt32Array, win: bool) -> void:
+	_flash(c, Pal.C_LADDER if win else Pal.C_SNAKE, "ring", 0.4)
 
 
 ## Reaching the goal is the only event in the game that ends it. It gets the star it
