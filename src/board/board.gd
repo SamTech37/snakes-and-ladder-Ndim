@@ -5,8 +5,47 @@ extends RefCounted
 
 ## Pure lattice math. No nodes, no state. Dimension count is data (`size`), not code.
 
-## Gap between projected copies for axes 3+ (grid-of-grids projection).
+## Blank space between neighbouring planes once they are pulled apart, in cells.
 const GAP := 2.0
+
+## Offset from one stacked plane to the next: straight back, which at the default
+## isometric view slides each plane down and left of the one in front, so the stack
+## reads as a fanned deck of cards.
+##
+## Kept short on purpose. Widening it to 3.5 did drive the all-cells collision count
+## to zero, but a deck spread that far apart is already most of the way to the
+## exploded row and the two views stopped being distinguishable. Cells on the dimmed
+## planes are background, not targets: what has to be legible in FOCUS is the lit
+## plane, and tests/test_readable.gd measures exactly that.
+## Two fan directions for a packed deck, alternating stack by stack. Straight from
+## ideas/sketch.png: neighbouring decks are drawn sliced differently -- one piled
+## upward, the next fanned sideways -- so a step along axis 3 is visibly a different
+## kind of move from a step along axis 2, instead of both reading as "over there".
+##
+## Both carry a small negative z. The camera sits on +z, so plane 0 -- where the
+## player starts -- ends up at the front of its deck rather than buried at the back,
+## and no two planes are ever coplanar.
+## Depth-dominant, because a 3D board is a **cube sliced into planes**: the slices
+## recede into the screen with gaps cut between them, and the cube keeps its shape.
+##
+## These were briefly 1.55 *up* and 0.4 back, which made the deck a staircase
+## climbing the screen instead of a cube. It also left only 2.0 units of depth across
+## the whole stack, so switching the camera to perspective changed almost nothing --
+## an 8% convergence at 25 units of camera distance.
+##
+## Pure depth, no lateral drift at all. A drift of 0.45 per slice was in here to tell
+## neighbouring 4D decks apart, but it shears the stack: six slices each nudged
+## sideways is a sheared prism, not a cube. A cube sliced into planes has to stay a
+## cube, so the drift is gone and the two steps are for now identical.
+##
+## 4D decks therefore no longer look different from one another. That needs a device
+## that does not deform the cube -- see CLAUDE.md.
+const STACK_STEP_PILE := Vector3(0.0, 0.0, -1.6)
+const STACK_STEP_FAN := Vector3(0.0, 0.0, -1.6)
+
+## Direction whole stacks travel while packed. Diagonal rather than along x so a row
+## of stacks reads horizontally at the isometric angle FOCUS uses.
+const STACK_ROW_DIR := Vector3(0.70710678, 0.0, -0.70710678)
 
 
 static func total_cells(size: PackedInt32Array) -> int:
@@ -35,37 +74,98 @@ static func index_to_coords(i: int, size: PackedInt32Array) -> PackedInt32Array:
 	return c
 
 
-## Axes 0,1,2 map to x,y,z. Axes 3,4,5 offset x,y,z by a whole lattice width,
-## so a 4D board draws as a row of cubes (tesseract as small multiples).
-static func coords_to_world(c: PackedInt32Array, size: PackedInt32Array) -> Vector3:
-	# ponytail: caps out at 6 dimensions, where axis 6 would collide with axis 0.
-	# Past that a projection needs a real basis matrix, not a modulo.
-	var xyz := [0.0, 0.0, 0.0]
-	for k in c.size():
-		var lo := k % 3
-		var val := float(c[k])
-		if k >= 3:
-			val *= size[lo] + GAP
-		xyz[lo] += val
-	return Vector3(xyz[0], xyz[1], xyz[2])
+## How many planes the board is made of: axes 2+ flattened.
+static func plane_count(size: PackedInt32Array) -> int:
+	var n := 1
+	for k in range(2, size.size()):
+		n *= size[k]
+	return n
 
 
-## True when the edge running from `c` along axis `k` lies on the *open* shell:
-## at least `n - 2` of the other axes sitting on the extreme named by `keep`.
+## Which plane a cell sits on: axes 2+ flattened. This is plane *identity* -- what
+## gets lit or dimmed together -- and every axis above 1 takes part in it.
+static func plane_of(c: PackedInt32Array, size: PackedInt32Array) -> int:
+	var p := 0
+	var stride := 1
+	for k in range(2, c.size()):
+		p += c[k] * stride
+		stride *= size[k]
+	return p
+
+
+## How deep into its own stack a cell sits: axis 2 alone. Layout must use this and
+## not plane_of -- flattened, axis 3 would both spread a plane along the row and
+## offset its whole stack, sending a 4D board off diagonally instead of into rows.
+static func depth_of(c: PackedInt32Array) -> int:
+	return c[2] if c.size() > 2 else 0
+
+
+## Which deck a cell belongs to: axes 3+ flattened. A 3D board has exactly one.
+static func stack_of(c: PackedInt32Array, size: PackedInt32Array) -> int:
+	var s := 0
+	var stride := 1
+	for k in range(3, c.size()):
+		s += c[k] * stride
+		stride *= size[k]
+	return s
+
+
+## Alternating decks are sliced the other way round, which is the only thing saying
+## the 4th axis is not just more of the 3rd.
+static func stack_step(c: PackedInt32Array, size: PackedInt32Array) -> Vector3:
+	return STACK_STEP_FAN if stack_of(c, size) % 2 == 1 else STACK_STEP_PILE
+
+
+## The board is a stack of 2D planes. Axes 0 and 1 are position *within* a plane;
+## axis 2 is which plane; axes 3+ lay whole stacks out, alternating across then down.
 ##
-## `keep[j]` is the far extreme of axis j from wherever the camera is. Drawing only
-## those turns the lattice into an open box seen from inside — three walls, no near
-## wall. Drawing all six instead superimposes the near grid on the far one, which is
-## the moire that made the board unreadable no matter how the colors were tuned.
-static func on_open_faces(c: PackedInt32Array, size: PackedInt32Array, k: int, keep: PackedInt32Array) -> bool:
-	var n := size.size()
-	if n <= 2:
-		return true
-	var pinned := 0
-	for j in n:
-		if j != k and c[j] == keep[j]:
-			pinned += 1
-	return pinned >= n - 2
+## `spread` lerps the layout: at 0 the planes are stacked a `PLANE_GAP` apart like a
+## deck of cards, at 1 they are pulled apart into one row per stack, flat on z = 0.
+## One number, so the view switch is a tween rather than a second code path.
+##
+## Every cell keeps its own point in both layouts. The projection this replaced
+## mapped axes straight onto x/y/z and put 19-25% of cells within 8 screen pixels of
+## an unrelated cell at every angle measured -- a point in the volume did not say
+## which cell it was, which no amount of colour or culling could fix. See
+## tests/test_readable.gd.
+static func coords_to_world(c: PackedInt32Array, size: PackedInt32Array, spread := 0.0) -> Vector3:
+	var p := float(depth_of(c))
+	var in_plane := Vector3(c[0], _in_plane_y(c), 0.0)
+	var stacked := in_plane + stack_step(c, size) * p
+	# Straight along x, because SPREAD looks at the board face-on: the planes have to
+	# come out as a flat row of squares, not a tilted row that is only the packed
+	# deck with wider gaps.
+	var exploded := in_plane + Vector3.RIGHT * p * (size[0] + GAP)
+	return stacked.lerp(exploded, spread) + _stack_offset(c, size, spread)
+
+
+static func _in_plane_y(c: PackedInt32Array) -> float:
+	return float(c[1]) if c.size() > 1 else 0.0
+
+
+## Axes 3+ move whole stacks around. Axis 3 lines the stacks up in a row while they
+## are packed, and once each stack has exploded into its own row it stacks those rows
+## downward instead -- so a 4D board is a row of decks, and spread it is one row of
+## planes per deck, rows under each other.
+##
+## Packed, the row runs along STACK_ROW_DIR rather than x: laid along x the stacks
+## march off diagonally at the isometric angle, because the plane fan goes that way.
+static func _stack_offset(c: PackedInt32Array, size: PackedInt32Array, spread: float) -> Vector3:
+	if c.size() <= 3:
+		return Vector3.ZERO
+	var w := (size[0] + GAP) if size.size() > 0 else GAP
+	var h := (size[1] + GAP) if size.size() > 1 else GAP
+	var packed := STACK_ROW_DIR * (w * 1.8)
+	var loose := Vector3(0.0, -h * 1.6, 0.0)
+	var off := packed.lerp(loose, spread) * float(c[3])
+	# ponytail: axes 4+ just keep marching downward at a widening stride, which is
+	# over-generous while packed. A 6D board would want a real basis matrix; nothing
+	# has needed one yet and there is no board that size to look at.
+	var down := h * 1.6 * float(size[3])
+	for k in range(4, c.size()):
+		off.y -= float(c[k]) * down
+		down *= float(size[k])
+	return off
 
 
 static func manhattan(a: PackedInt32Array, b: PackedInt32Array) -> int:

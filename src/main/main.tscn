@@ -1,4 +1,4 @@
-[gd_scene load_steps=11 format=3]
+[gd_scene load_steps=16 format=3]
 
 [ext_resource type="Script" path="res://src/main/main.gd" id="1_main"]
 [ext_resource type="PackedScene" path="res://src/ghost/ghost.tscn" id="2_ghost"]
@@ -9,10 +9,49 @@ background_color = Color(0, 0, 0, 1)
 tonemap_mode = 0
 
 [sub_resource type="StandardMaterial3D" id="Mat_lines"]
+cull_mode = 2
 shading_mode = 0
 vertex_color_use_as_albedo = true
 
 [sub_resource type="ImmediateMesh" id="Mesh_grid"]
+
+[sub_resource type="CylinderMesh" id="Mesh_shaft"]
+material = SubResource("Mat_lines")
+top_radius = 0.05
+bottom_radius = 0.05
+height = 1.0
+radial_segments = 8
+rings = 0
+
+[sub_resource type="CylinderMesh" id="Mesh_head"]
+material = SubResource("Mat_lines")
+top_radius = 0.0
+bottom_radius = 0.17
+height = 1.0
+radial_segments = 10
+rings = 0
+
+[sub_resource type="SphereMesh" id="Mesh_dot"]
+material = SubResource("Mat_lines")
+radius = 0.11
+height = 0.22
+radial_segments = 10
+rings = 5
+
+[sub_resource type="MultiMesh" id="MM_shaft"]
+transform_format = 1
+use_colors = true
+mesh = SubResource("Mesh_shaft")
+
+[sub_resource type="MultiMesh" id="MM_head"]
+transform_format = 1
+use_colors = true
+mesh = SubResource("Mesh_head")
+
+[sub_resource type="MultiMesh" id="MM_dot"]
+transform_format = 1
+use_colors = true
+mesh = SubResource("Mesh_dot")
 
 [sub_resource type="StandardMaterial3D" id="Mat_player"]
 shading_mode = 0
@@ -25,11 +64,16 @@ height = 0.52
 radial_segments = 12
 rings = 6
 
-[sub_resource type="ImmediateMesh" id="Mesh_cross"]
-
 [sub_resource type="SystemFont" id="Font_mono"]
 font_names = PackedStringArray("JetBrains Mono", "DejaVu Sans Mono", "Liberation Mono", "monospace")
 subpixel_positioning = 0
+
+[sub_resource type="StyleBoxFlat" id="Box_hud"]
+bg_color = Color(0, 0, 0, 0.78)
+content_margin_left = 8.0
+content_margin_top = 4.0
+content_margin_right = 8.0
+content_margin_bottom = 4.0
 
 [node name="Main" type="Node3D"]
 script = ExtResource("1_main")
@@ -41,19 +85,25 @@ environment = SubResource("Env_neon")
 [node name="CamRig" type="Node3D" parent="."]
 
 [node name="Camera3D" type="Camera3D" parent="CamRig"]
+fov = 50.0
 
 [node name="Grid" type="MeshInstance3D" parent="."]
 material_override = SubResource("Mat_lines")
 mesh = SubResource("Mesh_grid")
 
+[node name="Shafts" type="MultiMeshInstance3D" parent="."]
+multimesh = SubResource("MM_shaft")
+
+[node name="Heads" type="MultiMeshInstance3D" parent="."]
+multimesh = SubResource("MM_head")
+
+[node name="Dots" type="MultiMeshInstance3D" parent="."]
+multimesh = SubResource("MM_dot")
+
 [node name="Ghosts" type="Node3D" parent="."]
 
 [node name="Player" type="MeshInstance3D" parent="."]
 mesh = SubResource("Mesh_player")
-
-[node name="Crosshair" type="MeshInstance3D" parent="Player"]
-material_override = SubResource("Mat_lines")
-mesh = SubResource("Mesh_cross")
 
 [node name="HUD" type="CanvasLayer" parent="."]
 
@@ -70,11 +120,13 @@ theme_override_constants/margin_bottom = 24
 
 [node name="Rows" type="VBoxContainer" parent="HUD/Margin"]
 layout_mode = 2
+size_flags_vertical = 0
 
 [node name="Status" type="Label" parent="HUD/Margin/Rows"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.55, 1, 0.8, 1)
 theme_override_fonts/font = SubResource("Font_mono")
+theme_override_styles/normal = SubResource("Box_hud")
 theme_override_font_sizes/font_size = 22
 text = "SPACE to roll"
 
@@ -82,4 +134,5 @@ text = "SPACE to roll"
 layout_mode = 2
 theme_override_colors/font_color = Color(0.62, 0.66, 0.85, 1)
 theme_override_fonts/font = SubResource("Font_mono")
+theme_override_styles/normal = SubResource("Box_hud")
 theme_override_font_sizes/font_size = 16
