@@ -1,54 +1,52 @@
-# Session 1
+# TODO
 
-1. playability [DONE]
-2. Events: Roguelike & RNG
+Status: ~~struck~~ = done · **HALF** = partly built · **RETOOL** = built wrong, needs redesign
 
-Fight foes by rolling dices. win their alternative dices or make your own stronger.
+## Session 1
 
-fight goes like this
-(a) roll dices to decide what minigames to play: 比大、比小、對子、奇偶、吹牛、猜結果、比中位數、比標準差、...any simple dice games you can think of
-(b) roll dices to decide the points, the numbers.
-could be (a) then (b) OR (b) then (a), because sometimes you don't know what you're up against before you start rolling the dices. that's fun.
+1. ~~playability~~ **DONE**
 
-the key idea here is that the game is arranged into a series of mini-games and decisions and tactics embedded inside this larger meta-game, going from Source Point to Destination Point.
+2. **Events: roguelike & RNG** — **HALF, parts RETOOL**
+   - ~~fight foes by rolling dice, win their dice~~
+   - ~~minigames: 比大 比小 奇偶(odd/even call)~~ · 對子 吹牛 猜結果 比中位數 比標準差 not built
+   - ~~(a)-then-(b) and (b)-then-(a) as foe traits~~ — only the two *known* orders (OPEN, TELL). Blind orders not built.
+   - **RETOOL** — the meta-game is now two games fighting each other for the screen. Fights interrupt navigation and share its dice.
 
-3. procedural generation?
+3. **Procedural generation** — **not started**
+   - links, foes and gifts are all uniform rejection sampling
+   - no difficulty curve, no guarantee a snake is reachable, no chain reactions
+   - non-uniform tile size / non-uniform grid: untouched
 
-how to foster an environment where fun and unpredictable chain reactions can happen, like in Balatro?
+4. **Twist and turn: D → D+1** — **HALF**
+   - ~~beat the boss, climb a dimension, keep the kit~~
+   - ~~animated transition~~
+   - no replay/continue *choice* at the end — it just climbs
+   - **open**: per-axis extent shrinks 10→6→4→3 as D rises, to hold a floor's crossing cost constant while cells multiply. That is why 5D is nine 3×3 squares with nothing to look at. Never revisited after boards became floors.
 
-snakes and ladders need to be properly distributed across the map.
+## Session 1.5 — undo what this session broke
 
-non-uniform tile size (visuals only) and non-uniform grid (actual mechanism)?
+5. **Roamers should roam, not hunt** — **RETOOL**
+   - the chaser follows you to the edge of the world; every turn becomes pressure, and the endgame stall goes from tense to fatal
+   - **standers**: fixed foes on cells, as now — you choose to walk into them
+   - **roamers**: wander their own patch (a plane, a deck, a neighbourhood). You meet one by being somewhere, not by being hunted. No pursuit, no distance readout, no clock.
+   - roamers roll their die to move, and links carry them too
 
-4. twist and turn continue
+6. **Links feel weak** — **open**
+   - the game became dice, dimensions and odds; being thwarted back through space (and time?) is what snakes and ladders were for
 
-end game ask replay or continue. continue makes the dimension goes from D to D+1, and the game continues from that point onward.
+7. **Whatever else the playtest condemns** — the verdict is that the whole is worse than the navigation game it was built on
 
----
+## Session 2 — spec, plan, then build
 
-# Session 2
+8. **Sane RNG mechanisms** — which dice appear, how foes are drawn, how gifts are placed
+9. **Map generation** — item 3 above, properly specced first
 
-now the presence of Snakes & Ladders (links) feels a bit weak. we have turned this thing into a game about dices and dimensionals and odds. but what about the funsies of being thwarted back in space? (and time perhaps.)
+## Later
 
-oh right, the Roamer Foes roll their die to catch you, but they will also be affected by the links.
-
-Skills: passive skills provided by special/rare dies. e.g. can ignore Snakes, attracts to Ladders, has more favorable rolls, etc. simple stuff only. this might seems OP but in case that the later stages gets too difficult or repetitive, which they will, it'll come in handy
-
-the oracle die: a sphere, ask input for what roll of number you want, and gives you exactly that.
-
-the devil's die: no. faces = D, each direction gets a different value. you still pick one axis to move along.
-
-5. roamers should roam, not hunt
-
-playtested: the chaser is diabolical. it follows you to the edge of the world and turns every turn into pressure, which is exactly what the navigation game did not need. it also drags the endgame stall — already the tense part — into being the dangerous part.
-
-replace it with two kinds of thing that stay where they belong:
-- **standers**: fixed foes on cells, as now. you choose to walk into them.
-- **roamers**: wander their own patch — a plane, a deck, a neighbourhood — and you meet one by being in the wrong place, not by being hunted. no pursuit, no distance readout, no clock.
-
-the point is that the board stays somewhere you can look at and think in.
-
-6. session plan
-
-- **1.5** — undo the damage this session's solutions caused. the chaser above, and whatever else the playtest says is worse than what it replaced.
-- **2** — spec, plan, then implement: sane mechanisms for the RNG (what dice appear, how foes are drawn, how gifts are placed) and for map generation (job iii — difficulty curve, reachable snakes, chain reactions).
+10. **Skills** — passive effects on rare dice: ignore snakes, attract to ladders, favourable rolls. Simple only. Reserve for when later floors get repetitive.
+11. **Oracle die** — a sphere; name the roll you want and get it
+12. **Devil's die** — faces = D, one value per direction; you still pick the axis
+13. **d1** — deletes the endgame if handed over early; unlock material
+14. **Blind commit orders** — commit first, learn after. Only a bet once the vocabulary exists.
+15. **CC0 synthwave BGM** — hook is in, no track sourced
+16. **Reference art half used** — `ideas/sketch.png` deck arrangement is built; the perspective-warped and wave-displaced grids in the other plates are not

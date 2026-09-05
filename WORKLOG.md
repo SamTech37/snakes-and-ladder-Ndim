@@ -1,39 +1,31 @@
 # Worklog
 
-## 2026-09-06 — playtest round (`feat/roguelike`, 8 commits)
+## 2026-09-06 — playtest round (`feat/roguelike`, 9 commits)
 
-Everything here came out of the first hand-played runs. Nothing was found by a test; the tests came after, to hold each one down.
+**Verdict: the whole is worse than the navigation game it was built on.** Playable, but confusing to play and to work on. Session 1.5 is subtraction.
 
-### Dead ends found by playing
+### Fixed
+- kit could be unreachable — `[3,3,3]` twice moves in threes for ever. `Rules.reach()` (gcd of faces) must be 1 for every die; `damaged()` upholds it.
+- kit cap forced discards that caused it. Cap gone.
+- boss struck contests off its own list, then ran out mid-match.
+- a fight could take your last die on the first foe. Last die breaks instead, shatters at two faces.
+- tray crashed once the kit passed 8 dice. It is a window now.
+- chaser used one foe per floor, so wins handed you copies of one die.
+- boss win paid nothing, not even its die.
+- tray showed dice already taken — `_refresh_hud()` redraws it; `_fight_view()` hands the screen its contest list.
+- opening view was framed before the HUD had a size, so `C` "recentred" a fresh game.
 
-**A kit could be unable to reach the goal at all.** Two `[3,3,3]` dice roll 3 and only 3, so one cell short of the goal there is no move, for ever, and every reroll comes up 3 again. `Rules.reach()` is the gcd of a die's faces and must be 1 for every die the game hands out — moves go both ways along an axis, so that is the whole condition. `damaged()` upholds it too, and `test_minigames.gd` walks every pool and every chain of damage down to the bottom. Two authored dice were locked.
+### Added
+Results wait for SPACE. Climb animates. 奇偶 takes a caller (two contests). Draws re-thrown. Gift dice on the floor. `?` glossary. `SHIFT+R` restarts at floor 1. Chaser steps after your move, not between roll and move.
 
-**The kit cap made it likely.** One die per axis meant a win over the cap forced a discard, which is how a kit becomes two of the same die and nothing else. The cap is gone; `TRAY_DICE` is only how many fit on screen.
+### Tests
+`test_minigames` (every contest, case by case) and `test_deadend` (whole runs, something to press at every step, per-floor budget) are new. Seven suites green. `test_readable` 0.0% at both home angles.
 
-**A boss with two contests deadlocked its own third round.** Best-of-three insisted on a fresh contest each round, ran out, and drew an empty list with SPACE doing nothing.
-
-**A fight could take your last die and end the run on the first foe.** The last die is never taken now: it breaks, losing its largest face, and only shatters at two faces.
-
-### The frontend rule
-
-Every drift bug this round was one bug: state changed and something forgot to tell the view. The tray showed a die already taken; the contest panel re-derived "what is left" and disagreed with the code that commits it. `CLAUDE.md` rule 7 now says the frontend is a function of the backend, `_refresh_hud()` redraws the tray as well, and `_fight_view()` hands the screen the contest list rather than letting it work one out.
-
-### Also
-
-Results wait to be read (`YOU WON` / `YOU LOST` / `FLOOR CLEARED`, then SPACE). Climbing a floor animates — the old board falls away, the new one assembles out of its planes. 奇偶 takes a caller, so it is two contests. Draws are thrown again. Freebie dice lie on the board. `?` opens a glossary. `SHIFT+R` restarts at the first floor. The chaser steps after your move, never between the roll and it. The opening view is the fitted one — the first fit ran before the HUD had been laid out, which is why `C` appeared to "recentre" a fresh game.
-
-### Verified
-
-Six suites, all green: `test_board`, `test_play`, `test_minigames` (new — every contest case by case), `test_fight`, `test_run`, `odds`. `test_readable` 0.0% at both home angles on all four boards.
-
-Not verified: a full run played to a natural death.
+### Not verified
+A full run to a natural death.
 
 ### Next
-
-1. **Playtest again.** Now that the dead ends are gone, whether the chase and the fights are actually *fun* is still unmeasured.
-2. **Procedural generation** (job iii) — still uniform rejection sampling for links, foes and gifts alike.
-3. **The blind commit orders** (i) and (ii).
-4. Roamers rolling their die to move, and being carried by links, per `TODO.md`.
+`TODO.md` items 5–7 (session 1.5), then 8–9 (session 2).
 
 ## 2026-09-05 — the run (`feat/roguelike`, 3 commits)
 
