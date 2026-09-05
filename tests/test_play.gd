@@ -51,6 +51,7 @@ func _checks() -> void:
 		m.anim = false
 		# No foes and no boss here on purpose: this is the liveness check that a random walk still crosses the lattice, and a fight can end the run before it does. Fights are driven deterministically in tests/test_fight.gd instead.
 		m.foe_count = 0
+		m.gift_count = 0
 		m.boss_fight = false
 		m.roamer_on = false
 		root.add_child(m)

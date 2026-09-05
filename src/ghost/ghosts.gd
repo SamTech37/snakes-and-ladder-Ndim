@@ -11,7 +11,7 @@ const Pal = preload("res://src/palette.gd")
 ## color, so the marker still says what it does to a player who cannot tell the two
 ## greens apart -- and so it reads at a glance rather than by comparison.
 const SHAPE := {"": "Plain", "LADDER": "Ladder", "SNAKE": "Snake", "GOAL": "Goal",
-		"FOE": "Foe"}
+		"FOE": "Foe", "GIFT": "Gift"}
 
 @export var ghost_scene: PackedScene
 
@@ -24,13 +24,13 @@ var moves := []
 var mats := {}
 
 
-func show_moves(m: Array, links: Dictionary, foes := {}) -> void:
+func show_moves(m: Array, links: Dictionary, foes := {}, gifts := {}) -> void:
 	clear()
 	moves = m
 	for i in moves.size():
 		var g := ghost_scene.instantiate()
 		g.get_node("Number").text = str(i + 1)
-		var kind := Rules.landing(moves[i]["coords"], board.size, links, foes)
+		var kind := Rules.landing(moves[i]["coords"], board.size, links, foes, gifts)
 		var c := Pal.landing_color(kind)
 		var shape: MeshInstance3D = g.get_node(SHAPE[kind])
 		shape.visible = true

@@ -232,11 +232,22 @@ static func gen_links(size: PackedInt32Array, count: int, rng: RandomNumberGener
 	return links
 
 
+## Cells to leave something on. Same sampler as the foes and it shares their taken set, so a cell carries one thing at most.
+static func gen_gifts(size: PackedInt32Array, count: int, rng: RandomNumberGenerator,
+		links: Dictionary, foes: PackedInt32Array) -> PackedInt32Array:
+	var taken := {}
+	for c in foes:
+		taken[c] = true
+	return gen_foes(size, count, rng, links, taken)
+
+
 ## Cells to stand a foe on. Never the start, never the goal -- the goal is the boss's -- and never either end of a link, because a cell already carrying a teleport has something to say when you land on it and two of those would fight for the marker.
 static func gen_foes(size: PackedInt32Array, count: int, rng: RandomNumberGenerator,
-		links: Dictionary) -> PackedInt32Array:
+		links: Dictionary, taken := {}) -> PackedInt32Array:
 	var n := total_cells(size)
-	var taken := {0: true, n - 1: true}
+	taken = taken.duplicate()
+	taken[0] = true
+	taken[n - 1] = true
 	for a in links:
 		taken[a] = true
 		taken[links[a]] = true

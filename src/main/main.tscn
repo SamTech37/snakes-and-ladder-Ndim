@@ -244,7 +244,7 @@ theme_override_styles/normal = SubResource("Box_hud")
 theme_override_font_sizes/font_size = 16
 text = "floor 3D    which floor you are on. the floor number and the number of axes are the same number
 faces       the values on the die you have picked. a won die can read 1 1 5 5
-kit         the dice you hold. it caps at one die per axis of this floor
+kit         the dice you hold. no cap — every die you win or find is yours
 chaser 4    cells the hunter must walk to reach you. it steps once per move you make,
             and once for a reroll — time bought with no ground covered
 reroll      a spare die on the tray, earned by a roll that traps you. SPACE spends one
@@ -256,7 +256,12 @@ BIGGER      higher roll wins. a tie is a draw, thrown again, and costs nothing
 SMALLER     lower roll wins
 ODD / EVEN SUM   the two rolls are added. you pick which parity you are betting on
 
-marker      cube plain · cone up LADDER · cone down SNAKE · wedge FOE · diamond GOAL
+gift        a ring on the board is a die lying there. land on it and it is yours,
+            no fight and no cost. every one of them can reach any cell on its own
+reach       a die whose faces share a factor can only land that many steps away.
+            [3 3 3] moves in threes for ever — no die in the game is like that
+
+marker      cube plain · cone up LADDER · cone down SNAKE · wedge FOE · ring GIFT · diamond GOAL
 board       a star is a foe standing on that cell. the cage is the goal, and the boss"
 
 [node name="Controls" type="Label" parent="HUD/Margin/Rows/Help"]

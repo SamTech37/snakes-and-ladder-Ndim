@@ -29,7 +29,8 @@ const MAX_SPARES := 5
 const HIT_PX := 34.0
 
 @onready var cam: Camera3D = get_parent()
-@onready var dice: Array[Node3D] = [$Die0, $Die1]
+## Filled in _ready(): two dice are authored and the rest are copies, the same way the spares are. There is no cap on the kit any more, so the tray cannot be a fixed pair of nodes.
+var dice: Array[Node3D] = []
 @onready var spares: Node3D = $Spares
 ## The foe's die, on the opposite corner of the frame, facing the kit. A fight is two dice looking at each other -- the same thing the tray already is, mirrored.
 @onready var foe: MeshInstance3D = $Foe
@@ -43,6 +44,12 @@ var tumbling := false
 
 
 func _ready() -> void:
+	dice = [$Die0, $Die1]
+	for i in range(dice.size(), Rules.TRAY_DICE):
+		var extra: Node3D = $Die0.duplicate()
+		add_child(extra)
+		dice.append(extra)
+
 	# One spare is authored; the rest are copies of it. Five hand-placed shapes in the
 	# scene would say nothing the first one does not.
 	var first: Node3D = spares.get_child(0)
@@ -81,7 +88,8 @@ func _layout() -> void:
 	foe.position.x = 2.0 * (half_w - 0.42)
 
 
-## Shows the kit. A board with one die shows one die. Each entry is a die's list of face values, so the silhouette counts its *sides* and the label spells the faces.
+## Shows the kit, and puts every face label back to the die's name -- a die that has been rolled and moved with is showing a number that has already been spent, and a spent number where a name should be is just a wrong label.
+## A board with one die shows one die. Each entry is a die's list of face values, so the silhouette counts its *sides* and the label spells the faces.
 func set_kit(kit: Array[PackedInt32Array], sel: int) -> void:
 	picked = sel
 	for i in dice.size():
@@ -90,7 +98,7 @@ func set_kit(kit: Array[PackedInt32Array], sel: int) -> void:
 		if not d.visible:
 			continue
 		var on := i == picked
-		d.position = Vector3(0.28 * i, 0.0, 0.05 if on else -0.04)
+		d.position = Vector3(0.24 * i, 0.0, 0.05 if on else -0.04)
 		d.scale = Vector3.ONE * (1.0 if on else 0.68)
 		var c: Color = Pal.C_MOVE if on else Pal.C_MOVE * 0.45
 		# One side per face, so the shape counts the die out for you.

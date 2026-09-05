@@ -1,4 +1,4 @@
-[gd_scene load_steps=8 format=3]
+[gd_scene load_steps=9 format=3]
 
 [sub_resource type="SystemFont" id="Font_mono"]
 font_names = PackedStringArray("JetBrains Mono", "DejaVu Sans Mono", "Liberation Mono", "monospace")
@@ -40,6 +40,13 @@ material = SubResource("Mat_ghost")
 left_to_right = 0.5
 size = Vector3(0.42, 0.42, 0.42)
 
+[sub_resource type="TorusMesh" id="Mesh_gift"]
+material = SubResource("Mat_ghost")
+inner_radius = 0.12
+outer_radius = 0.24
+rings = 12
+ring_segments = 6
+
 [node name="Ghost" type="Node3D"]
 
 [node name="Plain" type="MeshInstance3D" parent="."]
@@ -61,6 +68,10 @@ mesh = SubResource("Mesh_goal")
 [node name="Foe" type="MeshInstance3D" parent="."]
 visible = false
 mesh = SubResource("Mesh_foe")
+
+[node name="Gift" type="MeshInstance3D" parent="."]
+visible = false
+mesh = SubResource("Mesh_gift")
 
 [node name="Number" type="Label3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.4, 0)

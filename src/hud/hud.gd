@@ -55,6 +55,9 @@ func _status(s: Dictionary) -> void:
 		status.text = _fight(s["fight"], s)
 		return
 	var here := "(%s)" % ", ".join(Array(s["coords"]).map(func(v): return str(v)))
+	# The tray can only hold so many side by side, so if the kit outgrows it the line says how many are not on screen rather than letting the tray quietly under-report the kit.
+	var over: int = s["kit"].size() - Rules.TRAY_DICE
+	var spill := "  -  %d more dice than the tray shows" % over if over > 0 else ""
 	# How far the chaser has to walk to reach you. A number rather than something to read off the board, because in a projected 4D view nobody can count that by eye -- and a clock you cannot read is an ambush.
 	var chase := ""
 	if not s["roamer"].is_empty():
@@ -63,8 +66,8 @@ func _status(s: Dictionary) -> void:
 	if s["roll"] == 0:
 		# No turn count and no ESC prompt past the first turn: the run's score is floors cleared, the win line reports the turns, and a prompt you have already read is noise sitting where the next real thing has to go.
 		var esc := "  -  ESC help" if s["turns"] == 0 else ""
-		status.text = "%s  -  floor %dD%s  -  SPACE to roll%s%s" \
-				% [here, s["size"].size(), chase, esc, _note(s)]
+		status.text = "%s  -  floor %dD%s%s  -  SPACE to roll%s%s" \
+				% [here, s["size"].size(), chase, spill, esc, _note(s)]
 		return
 	if s["moves"].is_empty():
 		status.text = "%s  -  nothing legal from here%s%s%s" % [here, chase, _spare(s), _note(s)]
@@ -88,9 +91,6 @@ func _fight(f: Dictionary, s: Dictionary) -> String:
 			cost = "your last die shatters" if s["kit"][0].size() <= Rules.MIN_FACES \
 					else "your last die cracks"
 		return _hi("YOU LOST", Pal.C_SNAKE) + "  %s  -  SPACE, %s" % [f["last"], cost]
-	if f["discard"]:
-		return _hi("KIT FULL", Pal.C_GOAL) + "  LEFT/RIGHT choose, SPACE drops %s%s" \
-				% [_hi(mine, Pal.C_MOVE), _note(s)]
 	var foe: Dictionary = f["foe"]
 	var head: String = _hi("BOSS  %d-%d of 3" % [f["wins"], f["losses"]], Pal.C_GOAL) \
 			if foe["boss"] else _hi("FIGHT", Pal.C_FOE)
@@ -134,7 +134,7 @@ func _moves(s: Dictionary) -> String:
 		return "no move on the board"
 	var lines := PackedStringArray()
 	for i in moves.size():
-		lines.append("%d)  %s" % [i + 1, _move_label(moves[i], s["size"], s["links"], s["foes"])])
+		lines.append("%d)  %s" % [i + 1, _move_label(moves[i], s["size"], s["links"], s["foes"], s["gifts"])])
 	return "\n".join(lines)
 
 
@@ -148,11 +148,12 @@ func _kit(s: Dictionary) -> String:
 	return "die  " + "  ".join(parts)
 
 
-func _move_label(m: Dictionary, size: PackedInt32Array, links: Dictionary, foes: Dictionary) -> String:
+func _move_label(m: Dictionary, size: PackedInt32Array, links: Dictionary, foes: Dictionary,
+		gifts: Dictionary) -> String:
 	var sign_char := "+" if m["dir"] > 0 else "-"
 	var axis: int = m["axis"]
 	var axis_name := Board.AXIS_NAMES[axis] if axis < Board.AXIS_NAMES.length() else str(axis)
-	var kind := Rules.landing(m["coords"], size, links, foes)
+	var kind := Rules.landing(m["coords"], size, links, foes, gifts)
 	return "%s%s -> (%s)%s" % [sign_char, axis_name,
 			", ".join(Array(m["coords"]).map(func(v): return str(v))),
 			"" if kind.is_empty() else "  " + kind]

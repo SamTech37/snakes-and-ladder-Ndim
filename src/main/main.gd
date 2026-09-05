@@ -27,6 +27,8 @@ const ROAMER_CELL := -2
 @export var link_span := 5
 ## Foes standing on the floor. Off (0) leaves a board with nothing to fight on the way, which is how test_play.gd keeps measuring that a random walk still reaches the goal.
 @export var foe_count := 5
+## Dice lying on the floor, free to pick up. They exist because a kit can end up unable to reach the goal at all, and because a board with nothing good on it is a board you only ever cross.
+@export var gift_count := 3
 ## The boss on the goal cell. Off means reaching the goal wins outright.
 @export var boss_fight := true
 ## The chaser. It is the clock: travel is otherwise free, and a floor with no clock is won by anyone patient enough.
@@ -49,6 +51,9 @@ var links := {}
 
 ## cell index -> foe. A foe leaves its cell once it has been fought, won or lost.
 var foes := {}
+
+## cell index -> a die lying there, free to whoever lands on it. The way out of a kit that cannot reach: every gift die reaches everywhere on its own.
+var gifts := {}
 
 ## The foe standing on the goal. Best of three, and the only fight on the floor you cannot walk around.
 var boss := {}
@@ -131,8 +136,12 @@ func new_game(keep := false) -> void:
 	coords = Board.index_to_coords(0, size)
 	links = Board.gen_links(size, link_count, rng, link_span)
 	foes = {}
-	for c in Board.gen_foes(size, foe_count, rng, links):
+	var foe_cells := Board.gen_foes(size, foe_count, rng, links)
+	for c in foe_cells:
 		foes[c] = Rules.make_foe(rng)
+	gifts = {}
+	for c in Board.gen_gifts(size, gift_count, rng, links, foe_cells):
+		gifts[c] = Rules.make_gift(rng)
 	boss = Rules.make_foe(rng, true) if boss_fight else {}
 	fight = {}
 	dead = false
@@ -209,15 +218,17 @@ func _assemble() -> void:
 func _redraw() -> void:
 	# The chaser first: sync() draws, and drawing reads whatever chaser cell it was last handed.
 	view3d.set_roamer(roamer, _roamer_next())
-	view3d.sync(coords, links, moves, foes)
+	view3d.sync(coords, links, moves, foes, gifts)
 
 
 func _refresh_hud() -> void:
+	# The tray is drawn from the kit every single time anything is redrawn, rather than by each place that changes the kit remembering to say so. One of them did not -- a lost boss round took a die and put the rematch straight up without touching the tray, so the screen showed a die that was already gone. The visual is a function of the data or it is a second copy of it that drifts.
+	_refresh_tray()
 	hud.refresh({
 		"coords": coords, "size": size, "links": links, "moves": moves,
 		"roll": roll, "turns": turns, "won": won,
 		"kit": kit, "die_index": die_index,
-		"rerolls": rerolls, "foes": foes, "fight": fight, "dead": dead,
+		"rerolls": rerolls, "foes": foes, "gifts": gifts, "fight": fight, "dead": dead,
 		"roamer": roamer, "floors": floors, "notice": notice,
 		"mode": "SPREAD" if view == View.SPREAD else "FOCUS",
 	})
@@ -403,7 +414,7 @@ func _roll(spend_turn: bool) -> void:
 	_refresh_tray()
 	if trapped:
 		tray.flash_spares()
-	ghosts.show_moves(moves, links, foes)
+	ghosts.show_moves(moves, links, foes, gifts)
 	_redraw()
 	_refresh_hud()
 
@@ -439,9 +450,7 @@ func _click(pos: Vector2) -> void:
 	# Mid-fight the tray is the fight: a die is the one you stake, or the one you drop to make room for what you just won.
 	if not fight.is_empty():
 		if i >= 0:
-			if fight["discard"]:
-				_discard(i)
-			elif fight["over"] == "":
+			if fight["over"] == "":
 				_pick_die(i)
 		return
 	if i >= 0:
@@ -470,8 +479,9 @@ func choose(i: int) -> void:
 		Audio.play("snake" if Rules.landing(coords, size, links) == "SNAKE" else "ladder")
 		await _slide_link(Board.index_to_coords(links[idx], size))
 
-	# Landing somewhere new changes which plane is lit and which frame is warm.
+	# Landing somewhere new changes which plane is lit and which frame is warm, and the roll has been spent -- the dice go back to showing their names rather than a number that has already been used.
 	_redraw()
+	_refresh_tray()
 	busy = false
 
 	# It moves after you do, not between your roll and your move. Stepping it on the roll meant a 4 that would have carried you clear could still be caught before you had touched a marker -- the roll is not the move, and being taken on a move you had not made yet is not a chase, it is a trap.
@@ -481,6 +491,15 @@ func choose(i: int) -> void:
 		return
 
 	var at := Board.coords_to_index(coords, size)
+	# Picked up on the way past, no fight and no cost. A gift is not a prize -- it is the thing that keeps a kit that can no longer reach the goal from being the end of the run.
+	if gifts.has(at):
+		kit.append(gifts[at])
+		notice = "picked up %s" % Rules.die_name(gifts[at])
+		gifts.erase(at)
+		Audio.play("token")
+		view3d.result_flash(coords, true)
+		_refresh_tray()
+		_redraw()
 	if coords == roamer:
 		# You can walk into it as easily as it walks into you.
 		_start_fight(roamer_foe, ROAMER_CELL)
@@ -511,7 +530,7 @@ func _start_fight(foe: Dictionary, cell: int) -> void:
 	view3d.fight_flash(coords)
 	notice = ""
 	fight = {"foe": foe, "cell": cell, "game": -1, "pick": 0, "wins": 0, "losses": 0,
-			"used": [], "discard": false, "last": "", "over": ""}
+			"used": [], "last": "", "over": ""}
 	tray.set_foe(foe["faces"])
 	_next_round()
 
@@ -598,6 +617,10 @@ func _settle() -> void:
 	if over == "LOST":
 		_fight_lost()
 	elif over == "CLEARED":
+		# The boss's die is the prize for the floor, and it was going nowhere: the win went straight to the climb and the fight ended having paid nothing at all.
+		var prize: PackedInt32Array = fight["foe"]["faces"]
+		kit.append(prize)
+		notice = "BEAT THE BOSS  -  took %s" % Rules.die_name(prize)
 		_end_fight()
 		if boss_fight:
 			_ascend()
@@ -611,12 +634,8 @@ func _fight_won() -> void:
 	var foe: Dictionary = fight["foe"]
 	notice = "WON the fight  -  took %s" % Rules.die_name(foe["faces"])
 	foes.erase(fight["cell"])
+	# No cap: a won die is a gain, full stop. It used to be one die per axis, so a win over the cap forced a discard -- and a discard can leave you holding two of the same die and nothing else, which is how a run ends up unable to reach the goal at all.
 	kit.append(foe["faces"])
-	# Over the cap, taking a die means dropping one. That is the whole cost of winning: the kit's shape is bounded even when your luck is not.
-	if kit.size() > Rules.kit_cap(size):
-		fight["discard"] = true
-		_refresh_tray()
-		return
 	_end_fight()
 
 
@@ -657,16 +676,6 @@ func _lose_die(i: int) -> void:
 	kit.remove_at(i)
 	die_index = clampi(die_index, 0, maxi(0, kit.size() - 1))
 	dead = kit.is_empty()
-
-
-func _discard(i: int) -> void:
-	if i >= kit.size():
-		return
-	notice = "dropped %s" % Rules.die_name(kit[i])
-	kit.remove_at(i)
-	die_index = clampi(die_index, 0, kit.size() - 1)
-	Audio.play("pick")
-	_end_fight()
 
 
 func _end_fight() -> void:
@@ -791,9 +800,7 @@ func _unhandled_input(event: InputEvent) -> void:
 ## There is no separate reroll key. A reroll *is* another throw, so it is the same key -- X was a second word for one idea, and one nobody would have guessed.
 func _commit() -> void:
 	if not fight.is_empty():
-		if fight["discard"]:
-			_discard(die_index)
-		elif fight["over"] != "":
+		if fight["over"] != "":
 			_settle()
 		else:
 			_resolve()
@@ -816,7 +823,7 @@ func _cycle_die(step: int) -> void:
 
 ## UP/DOWN walk the contests a foe has left, when the foe is the one who showed its die first and left the naming to you.
 func _cycle_contest(step: int) -> void:
-	if fight.is_empty() or fight["discard"] or fight["game"] >= 0 or fight["over"] != "":
+	if fight.is_empty() or fight["game"] >= 0 or fight["over"] != "":
 		return
 	var left := games_left()
 	if left.size() < 2:

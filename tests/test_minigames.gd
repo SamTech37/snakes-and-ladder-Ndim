@@ -11,7 +11,7 @@ const Rules = preload("res://src/game/rules.gd")
 
 var done := {}
 
-const CHECKS := ["cases", "exhaustive", "favours", "labels"]
+const CHECKS := ["cases", "exhaustive", "favours", "labels", "reach"]
 
 
 func _initialize() -> void:
@@ -19,6 +19,7 @@ func _initialize() -> void:
 	_exhaustive()
 	_favours()
 	_labels()
+	_reach()
 	for c in CHECKS:
 		if not done.has(c):
 			push_error("%s did not run to the end -- an assert above failed" % c)
@@ -123,6 +124,36 @@ func _favours() -> void:
 		for g in f["games"]:
 			assert(g >= 0 and g < MG.ALL.size(), "foe carries a contest that does not exist")
 	done["favours"] = true
+
+
+## No die the game can hand out may be locked. A die whose faces share a factor can only reach cells that many steps away -- [3,3,3] moves in threes and nothing else, so one cell short of the goal it can never land, and every reroll comes up 3 again. Moves go both ways along an axis, so a gcd of 1 is the whole condition.
+func _reach() -> void:
+	var pools := {"FOE_DICE": Rules.FOE_DICE, "BOSS_DICE": Rules.BOSS_DICE,
+			"GIFT_DICE": Rules.GIFT_DICE}
+	for name in pools:
+		for faces in pools[name]:
+			assert(Rules.reach(faces) == 1,
+					"%s carries %s, which can only ever move in %ds"
+					% [name, Rules.die_name(faces), Rules.reach(faces)])
+	for size in Rules.SIZES:
+		for faces in Rules.kit(size):
+			assert(Rules.reach(faces) == 1, "the starting kit on %s cannot reach" % str(size))
+
+	assert(Rules.reach(PackedInt32Array([3, 3, 3])) == 3, "the locked die is not being spotted")
+	assert(Rules.reach(PackedInt32Array([2, 4])) == 2)
+	assert(Rules.reach(PackedInt32Array([2, 3])) == 1, "two and three reach everywhere between them")
+
+	# And a die worn down by lost fights stays able to reach, all the way to the bottom.
+	for faces in Rules.FOE_DICE + Rules.BOSS_DICE + Rules.GIFT_DICE:
+		var d := faces
+		var guard := 0
+		while d.size() > Rules.MIN_FACES and guard < 12:
+			guard += 1
+			d = Rules.damaged(d)
+			assert(Rules.reach(d) == 1,
+					"%s breaks down to %s, which can only move in %ds"
+					% [Rules.die_name(faces), Rules.die_name(d), Rules.reach(d)])
+	done["reach"] = true
 
 
 ## Labels are what the player picks by, so they have to be distinct and non-empty.

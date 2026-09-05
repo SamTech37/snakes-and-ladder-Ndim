@@ -57,6 +57,9 @@ var moves := []
 ## cell index -> foe. Drawn on the board and not only on the markers: steering around a fight is a real move, and you cannot steer around something you can only see once it is already one step away.
 var foes := {}
 
+## cell index -> the die lying there. Drawn on the board like the foes, and for the same reason: a way out of a stuck kit is no use if you can only see it once you are already on top of it.
+var gifts := {}
+
 ## The chaser's cell and the cell it steps to next. The chaser itself is a node (Main/Roamer), so it is **never dimmed** -- the one thing on the board that ignores which plane is lit, because it is the clock and a clock you have to hunt for is not one. This pair only draws the hint line that says which way it is about to go.
 var roamer := PackedInt32Array()
 var roamer_next := PackedInt32Array()
@@ -75,11 +78,12 @@ func cell_count() -> int:
 
 
 ## Takes the turn's state and redraws. The only entry point the turn loop needs.
-func sync(c: PackedInt32Array, l: Dictionary, m: Array, f := {}) -> void:
+func sync(c: PackedInt32Array, l: Dictionary, m: Array, f := {}, g := {}) -> void:
 	coords = c
 	links = l
 	moves = m
 	foes = f
+	gifts = g
 	redraw()
 
 
@@ -128,6 +132,7 @@ func redraw() -> void:
 
 	_goal_beacon(im, world(Board.goal_coords(size)))
 	_draw_foes(im, lit)
+	_draw_gifts(im, lit)
 	_draw_roamer(im)
 	_preview_links(im)
 	_draw_fx(im)
@@ -182,6 +187,22 @@ func _draw_roamer(im: ImmediateMesh) -> void:
 	var side: Vector3 = rig.perp(dir) * 0.16
 	_line(im, tip, tip - dir * 0.25 + side, Pal.C_FOE)
 	_line(im, tip, tip - dir * 0.25 - side, Pal.C_FOE)
+
+
+## A die lying on a cell: a small open ring, which is the one silhouette on the board that is neither a marker nor a threat.
+func _draw_gifts(im: ImmediateMesh, lit: Dictionary) -> void:
+	for idx in gifts:
+		var c := cell(idx)
+		var at := world(c)
+		var color: Color = Pal.C_GIFT * _fade(Board.plane_of(c, size), lit)
+		var b: Basis = rig.cam.global_transform.basis
+		var r := 0.26
+		var prev := at + b.x * r
+		for i in range(1, 13):
+			var a := TAU * float(i) / 12.0
+			var p := at + (b.x * cos(a) + b.y * sin(a)) * r
+			_line(im, prev, p, color)
+			prev = p
 
 
 ## Every foe on the board, all the time -- not only the ones a marker is standing on. Deciding to walk the long way round a fight needs the fight to be visible from further off than one roll.

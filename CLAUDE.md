@@ -203,11 +203,19 @@ Pick a die, roll it for step size, then pick an axis and direction. A move that 
 
 The game is a run now: **the floor number and the dimension count are the same number.** It opens on the 2D board with **one die**, and beating the floor's boss climbs to D+1 carrying the kit. It never ends; it stops when your last die is gone. `Rules.floor_size(d)` gives the board for a floor — `SIZES` for 2D–5D, then the smallest lattice that still has an interior.
 
-**The kit is one pool doing two jobs with opposite requirements.** The dice that move you are the dice you fight with, and `odds.gd` proves a big die travels badly while a big die is the best thing you can hold in BIGGER. `Rules.kit_cap()` is the dimension count, so ascending buys a slot and no configuration is good at everything.
+**The kit is one pool doing two jobs with opposite requirements.** The dice that move you are the dice you fight with, and `odds.gd` proves a big die travels badly while a big die is the best thing you can hold in BIGGER.
+
+**No cap on the kit.** It was one die per axis, so a win over the cap forced a discard — and a discard can leave you holding two of the same die and nothing else. A won die is a gain now, and `Rules.TRAY_DICE` is only how many fit side by side on screen; past that the status line says how many are not shown, because the tray may not under-report the kit.
+
+**No die can be locked.** `Rules.reach()` is the gcd of a die's faces, and it must be 1 for every die the game hands out. A die whose faces share a factor only ever lands that many steps away — `[3,3,3]` moves in threes for ever, so one cell short of the goal it can never land and every reroll comes up 3 again. That was a real dead run. Moves go both ways along an axis, so gcd 1 is the whole condition: `[2,3]` reaches one cell by going three forward and two back. `damaged()` upholds it too, dropping a face to 1 rather than leaving a locked die, and `test_minigames.gd` walks every pool and every chain of damage.
+
+**Freebies lie on the floor.** `gifts` is `{cell: faces}`, picked up by landing — no fight, no cost, and gone from the board. Every gift die reaches everywhere on its own, because the point of one is to unstick a kit that cannot get to the goal.
 
 **Which starting die is measured, not chosen.** Alone on the opening board a d3 costs 11.61 rolls against a d6's 13.82, and on `[6,6,6]` a d3 costs 10.62 against a d5's 13.38, so `Rules.start_kit()` takes the smallest. `odds.gd` prints both columns and asserts it.
 
-**Fights are one contest, one roll each** — a beat inside the turn, not a mode you leave the board for. The boss takes two of three. **The die you commit is the die you stake:** lose and the foe takes that one, so the question is never only which die wins, but which die you can afford to lose. Win and its die is offered; over the cap, taking one means dropping one.
+**The tray is drawn from the kit on every refresh**, not told about changes by each place that makes one. One of them did not tell it: a lost boss round took a die and put the rematch straight up, and the screen showed a die that was already gone. A visual that is not a function of the data is a second copy of it, and it drifts. The face labels go back to the die's name once a roll has been spent, for the same reason.
+
+**Fights are one contest, one roll each** — a beat inside the turn, not a mode you leave the board for. The boss takes two of three. **The die you commit is the die you stake:** lose and the foe takes that one, so the question is never only which die wins, but which die you can afford to lose. Win and its die is yours — the boss's included, which for a while it silently was not.
 
 **Your last die cannot be taken, only broken.** A run sets out on one die, so a foe that could take it would end the game on a coin flip before the second roll. Holding one, a loss drops that die's *largest* face (`Rules.damaged()`) — it gets safer to travel with and worse to fight with as it wears down, and the bipyramid on the tray visibly loses a side. A die already at `MIN_FACES` is lost outright, and that is the end of the run. A d5 therefore survives three lost fights and goes on the fourth.
 

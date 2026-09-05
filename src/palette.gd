@@ -27,6 +27,8 @@ const C_LADDER := Color(0.49, 1.0, 0.31)
 const C_SNAKE := Color(1.0, 0.24, 0.60)
 ## A foe standing on a cell. Hot red-orange: the only colour on the board that reads as a threat rather than as terrain, and far enough from C_SNAKE's pink that a fight and a slide back are not the same warning.
 const C_FOE := Color(1.0, 0.36, 0.16)
+## A die lying on the floor, free to pick up. Pale green-white: the only friendly thing on the board that is not already yours, and far from C_LADDER's acid green so a gift is not read as a link.
+const C_GIFT := Color(0.75, 1.0, 0.85)
 ## The goal. Hot amber-gold rather than the pale yellow this was: on a board of
 ## violet, teal and acid green, a washed-out yellow read as another dim line instead
 ## of as the thing you are trying to reach.
@@ -65,4 +67,6 @@ static func landing_color(kind: String) -> Color:
 			return C_SNAKE
 		"FOE":
 			return C_FOE
+		"GIFT":
+			return C_GIFT
 	return C_MOVE

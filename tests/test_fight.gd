@@ -42,12 +42,15 @@ func _initialize() -> void:
 func _contests() -> void:
 	# The contests themselves are covered case by case in tests/test_minigames.gd. What matters here is that a fight drives them at all.
 	# One die per dimension of the floor you are standing on.
-	assert(Rules.kit_cap(PackedInt32Array([6, 6, 6])) == 3)
-	assert(Rules.kit_cap(PackedInt32Array([10, 10])) == 2)
-
 	# A foe marker has to be tinted for what it is, like every other landing.
 	assert(Pal.landing_color("FOE") == Pal.C_FOE)
 	assert(Rules.landing(PackedInt32Array([1, 0, 0]), PackedInt32Array([6, 6, 6]), {}, {1: {}}) == "FOE")
+
+	# A die lying on the floor is its own landing, tinted and shaped like every other.
+	assert(Pal.landing_color("GIFT") == Pal.C_GIFT)
+	assert(Rules.landing(PackedInt32Array([2, 0, 0]), PackedInt32Array([6, 6, 6]), {}, {}, {2: PackedInt32Array([1, 2])}) == "GIFT")
+	for faces in Rules.GIFT_DICE:
+		assert(Rules.reach(faces) == 1, "a freebie that cannot reach is no way out of anything")
 
 	# And shaped for it: the marker looks up a child of ghost.tscn by name, so a missing node would only surface as a crash on the turn a foe is one roll away.
 	var g = load("res://src/ghost/ghost.tscn").instantiate()
@@ -75,12 +78,11 @@ func _stake() -> void:
 	m.free()
 
 
-## Over the cap, taking a die means dropping one -- the kit never grows past one die per dimension of the floor.
+## A won die is a gain, full stop. The kit had a cap of one die per axis, and a win over it forced a discard -- which is how a run ends up holding two of the same die and unable to reach the goal at all.
 func _cap() -> void:
 	var m: Node3D = await _game()
-	var cap: int = Rules.kit_cap(m.size)
 	var full: Array[PackedInt32Array] = []
-	for _i in cap:
+	for _i in 5:
 		full.append(PackedInt32Array([6, 6]))
 	m.kit = full
 	m.die_index = 0
@@ -89,18 +91,29 @@ func _cap() -> void:
 	# Two ones against sixes at BIGGER: a win every time.
 	m._resolve()
 	_read(m)
-	assert(m.kit.size() == cap + 1, "the prize did not reach the kit")
-	assert(m.fight["discard"], "over the cap and nothing was asked to be dropped")
-	m._discard(0)
-	assert(m.kit.size() == cap, "the kit stayed over its cap")
-	assert(m.fight.is_empty(), "the fight did not end after the discard")
+	assert(m.kit.size() == 6, "the prize did not reach the kit")
+	assert(m.fight.is_empty(), "a win asked for something after the cap was removed")
+	assert(m.tray.dice[5].visible and not m.tray.dice[6].visible,
+			"the tray is not showing exactly the dice the kit holds")
 
-	# A win that leaves the kit at the cap asks for nothing.
-	m._lose_die(0)
-	m._start_fight(_foe(PackedInt32Array([1, 1]), [0], Rules.OPEN), 0)
-	m._resolve()
-	_read(m)
-	assert(m.kit.size() == cap and m.fight.is_empty(), "a win under the cap should not prompt")
+	# The tray is a function of the kit, every refresh. A lost boss round took a die and put the rematch straight up without touching the tray, and the screen showed a die that was already gone.
+	var b := _foe(PackedInt32Array([6, 6]), [0, 1, 2], Rules.OPEN)
+	b["boss"] = true
+	m.kit = _kit([PackedInt32Array([1, 1]), PackedInt32Array([1, 1]), PackedInt32Array([1, 1])])
+	m.die_index = 0
+	m._start_fight(b, -1)
+	for _i in 2:
+		m.fight["game"] = 0
+		m._resolve()
+		_read(m)
+	assert(m.kit.size() == 2, "a lost boss match did not cost a die")
+	assert(not m.fight.is_empty(), "the rematch did not come back up")
+	var shown := 0
+	for d in m.tray.dice:
+		if d.visible:
+			shown += 1
+	assert(shown == m.kit.size(),
+			"tray shows %d dice, kit holds %d" % [shown, m.kit.size()])
 	done["cap"] = true
 	m.free()
 
@@ -182,6 +195,21 @@ func _run_over() -> void:
 	# And a fight always contains a decision: down to one die there is nothing to choose between, so the foe shows its die and the contest becomes yours to name.
 	k._start_fight(_foe(PackedInt32Array([6, 6]), [0, 1], Rules.OPEN), 0)
 	assert(k.fight["game"] < 0, "an OPEN foe left no decision at all to a player holding one die")
+	# A gift is picked up by landing on it: no fight, no cost, and it leaves the board.
+	var g: Node3D = await _game()
+	g.kit = _kit([PackedInt32Array([1, 2])])
+	var at := 1
+	g.gifts = {at: PackedInt32Array([1, 3, 4])}
+	g._redraw()
+	g.roll = 1
+	g.moves = [{"axis": 0, "dir": 1, "coords": PackedInt32Array([1, 0, 0])}]
+	g.choose(0)
+	await process_frame
+	assert(g.kit.size() == 2, "landing on a gift did not add it to the kit")
+	assert(g.gifts.is_empty(), "the gift stayed on the board after being taken")
+	assert(g.fight.is_empty(), "picking up a die started a fight")
+	g.free()
+
 	done["run_over"] = true
 	k.free()
 	m.free()
@@ -225,7 +253,7 @@ func _keys() -> void:
 	assert(m.fight["pick"] == 1, "UP/DOWN did not move the highlight")
 	var chosen: int = m.games_left()[1]
 	m._commit()
-	assert(m.fight.is_empty() or m.fight["discard"] or m.fight["used"] == [chosen],
+	assert(m.fight.is_empty() or m.fight["used"] == [chosen],
 			"SPACE committed a contest other than the highlighted one")
 	done["keys"] = true
 	m.free()

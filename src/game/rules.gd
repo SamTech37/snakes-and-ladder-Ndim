@@ -91,22 +91,23 @@ static func die_faces(die: int, size: PackedInt32Array) -> int:
 ## its shape and the word in the move list, so the three cannot drift apart.
 ## `foes` is optional because a caller that has no foes to show -- a test measuring the lattice, say -- should not have to invent an empty one.
 static func landing(cell: PackedInt32Array, size: PackedInt32Array, links: Dictionary,
-		foes := {}) -> String:
+		foes := {}, gifts := {}) -> String:
 	var idx := Board.coords_to_index(cell, size)
 	# The goal is where the boss stands, so GOAL already says "a fight is here".
 	if idx == Board.total_cells(size) - 1:
 		return "GOAL"
 	if foes.has(idx):
 		return "FOE"
+	if gifts.has(idx):
+		return "GIFT"
 	if not links.has(idx):
 		return ""
 	var to := Board.index_to_coords(links[idx], size)
 	return "LADDER" if Board.dist_to_goal(to, size) < Board.dist_to_goal(cell, size) else "SNAKE"
 
 
-## How many dice you may hold: one per dimension of the floor you are standing on. The cap is the whole cost of winning a die -- over it, taking one means dropping one.
-static func kit_cap(size: PackedInt32Array) -> int:
-	return size.size()
+## How many dice may be shown side by side on the tray. There is **no cap on the kit** -- it was one die per axis, and it turned a run into a forced discard that could leave you holding two of the same locked die. Winning a die is a gain now, and the shape of the kit is the player's business.
+const TRAY_DICE := 8
 
 
 ## The board for floor `d`. The run is a climb through dimension counts, so the floor number and the dimension count are the same number. The first four come out of SIZES, which odds.gd and the screenshot harness already measure; past 5D nothing has been looked at, so they are the smallest lattice that still has an interior.
@@ -118,6 +119,24 @@ static func floor_size(d: int) -> PackedInt32Array:
 	for _i in maxi(2, d):
 		out.append(3)
 	return out
+
+
+## Every step this die can take, reduced. A die whose faces share a common factor can only ever reach cells that many steps away: [3,3,3] moves 3 and nothing else, so from one cell short of the goal it can never land on it, and no number of rerolls changes that -- every roll is the same 3.
+##
+## Moves go both ways along an axis, so a gcd of 1 is enough to reach anything: [2,3] gets you one cell by going three forward and two back. That makes this the whole condition, and every die the game can hand out has to satisfy it.
+static func reach(faces: PackedInt32Array) -> int:
+	var g := 0
+	for v in faces:
+		g = _gcd(g, v)
+	return maxi(1, g)
+
+
+static func _gcd(a: int, b: int) -> int:
+	while b != 0:
+		var t := b
+		b = a % b
+		a = t
+	return a
 
 
 ## The fewest faces a die can be ground down to. Below this it is gone: a two-face die is already a coin, and a one-face die makes a forward move legal from every cell but the goal, which deletes the endgame.
@@ -133,6 +152,13 @@ static func damaged(faces: PackedInt32Array) -> PackedInt32Array:
 		if out[i] >= out[worst]:
 			worst = i
 	out.remove_at(worst)
+	# Losing a face can leave the rest sharing a factor -- [3,3,6] breaks down to [3,3], which can only ever move in threes and cannot land on a goal one cell away. A cracked die gives up a face rather than the run, so the smallest one drops to 1.
+	if reach(out) > 1:
+		var least := 0
+		for i in out.size():
+			if out[i] <= out[least]:
+				least = i
+		out[least] = 1
 	return out
 
 
@@ -154,17 +180,32 @@ static var FOE_DICE: Array[PackedInt32Array] = [
 	PackedInt32Array([1, 2, 3]),
 	PackedInt32Array([1, 2, 3, 4, 5]),
 	PackedInt32Array([1, 1, 5, 5]),
-	PackedInt32Array([3, 3, 3]),
-	PackedInt32Array([2, 2, 4, 6]),
+	PackedInt32Array([1, 3, 3]),
+	PackedInt32Array([2, 2, 4, 5]),
 	PackedInt32Array([1, 3, 5, 5]),
 ]
 
 ## What a boss brings. Bigger and stranger than anything on the floor, because it is the one fight you cannot walk around.
 static var BOSS_DICE: Array[PackedInt32Array] = [
-	PackedInt32Array([2, 4, 6, 6]),
+	PackedInt32Array([2, 4, 5, 6]),
 	PackedInt32Array([1, 1, 6, 6]),
-	PackedInt32Array([4, 4, 4, 4]),
+	PackedInt32Array([3, 4, 4, 5]),
 ]
+
+
+## Dice lying on the floor, free to whoever lands on them. Plain and small: a gift is a way out of a kit that cannot reach, not a prize, and the interesting dice are still the ones you have to win.
+##
+## Every one of them reaches everywhere on its own (`reach() == 1`), because the whole point of a freebie is to unstick a run.
+static var GIFT_DICE: Array[PackedInt32Array] = [
+	PackedInt32Array([1, 2]),
+	PackedInt32Array([1, 2, 3]),
+	PackedInt32Array([1, 1, 2]),
+	PackedInt32Array([1, 3, 4]),
+]
+
+
+static func make_gift(rng: RandomNumberGenerator) -> PackedInt32Array:
+	return GIFT_DICE[rng.randi_range(0, GIFT_DICE.size() - 1)]
 
 
 ## A foe as plain data: its die, the contests it knows, and how much it tells you. A Dictionary rather than a class for the same reason `links` is one -- it is data the turn loop passes around, and nothing about it needs behaviour of its own.
