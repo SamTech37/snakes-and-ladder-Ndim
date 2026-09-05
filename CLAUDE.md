@@ -68,6 +68,11 @@ Godot **4.6.3** (Forward+, Jolt physics), binary at `~/.local/bin/godot`. No bui
 godot                                              # main scene: src/main/main.tscn
 godot --headless --script tests/test_board.gd      # lattice math asserts
 godot --headless --script tests/test_play.gd       # random play-throughs of the real scene
+godot --headless --script tests/odds.gd            # E[rolls] per board, solved not guessed
+
+# Scripts are interpreted, so a typo only surfaces when the scene loads. Parse-check
+# before running anything long — a cross-node call breaks `:=` and nothing else says so.
+godot --headless --check-only --script src/main/main.gd
 
 # These two need a real display: --headless uses the dummy rasterizer and hangs.
 # Run them in the FOREGROUND — a backgrounded GUI run dies with exit 144.
@@ -79,7 +84,7 @@ SNL_SEED=7 DISPLAY=:0 godot --position -6000,-6000 --script tests/shot.gd -- sho
 
 `shot.gd` args: output path, size, spread (`0` stacked / `1` exploded), `roll`, and an optional `yaw,pitch`. Screenshots go to `shots/`, which is gitignored.
 
-Controls: `SPACE` roll, number keys pick a move, `TAB` switch SPREAD/FOCUS, `D` cycle board dimensions, `C` recentre the camera, `F3` debug view, `R` restart, drag to orbit, right-drag to pan, wheel to zoom.
+Controls: `SPACE` roll, number keys pick a move — or pick the die when no move is pending — `X` spend a reroll, `TAB` switch SPREAD/FOCUS, `D` cycle board dimensions, `C` recentre the camera, `F3` debug view, `R` restart, drag to orbit, right-drag to pan, wheel to zoom.
 
 Pan exists because the fit frames the whole board: zoomed in on a big lattice there is otherwise no way to reach the corner being played in. It is an offset on top of the fitted pivot, so a refit keeps it; `C` flies it back to zero along with the orbit.
 
@@ -157,9 +162,17 @@ Keep `ambig%` at 0 **at each view's own angle** — isometric for FOCUS, face-on
 
 ### Rules
 
-Roll a d6 for step size, then pick an axis and direction. A move that would leave the lattice **is not offered** — no clamping, because clamping would let you slide into the goal corner in three turns. If no move is legal the turn is forfeit. Ladders and snakes are plain cell-to-cell teleports, `{from_index: to_index}`, generated so no cell is both a source and a destination and neither start nor goal is touched.
+Pick a die, roll it for step size, then pick an axis and direction. A move that would leave the lattice **is not offered** — no clamping, because clamping would let you slide into the goal corner in three turns. If no move is legal the turn is forfeit. Ladders and snakes are plain cell-to-cell teleports, `{from_index: to_index}`, generated so no cell is both a source and a destination and neither start nor goal is touched.
 
-`die_faces()` caps the d6 to `max(extent) - 1`: on a 5-wide axis a roll of 5 or 6 could never be legal anywhere, so a fixed d6 would waste a third of all turns.
+`Rules.die_faces()` caps a die to `max(extent) - 1`: on a 5-wide axis a roll of 5 or 6 could never be legal anywhere, so a fixed d6 would waste a third of all turns.
+
+**A bigger die is worse, and that is why there is a kit.** `tests/odds.gd` solves the whole lattice by value iteration: travel costs `2K(N-1)/(D+1)` rolls, and exact landing multiplies it by 2.5–3× — all of it endgame stall against the far wall. On `[6,6,6]` a lone d5 costs 13.4 rolls and a d6 costs 16.1; on `[4,4,4,4]` a d6 costs 19.1 against a d3's 9.6. Large faces are dead weight beside a wall.
+
+`Rules.DICE` is therefore a **kit** — `[6, 3]`, capped and deduplicated per board by `Rules.kit()`, so `[6,6,6]` offers d5 and d3 while `[4,4,4,4]` offers one d3. Measured: `[6,6,6]` drops from 13.4 rolls to **8.59**. Rule-level fixes were measured too and lost — declining a turn 10.4, bouncing off the wall 10.4 — and neither is a decision the player gets to make.
+
+**No d1.** With a d1 a forward move is legal from every cell but the goal, which deletes the endgame, the forfeits and every reroll. It is something to unlock, not to hand over at the start.
+
+**Rerolls are the only escape hatch.** A roll that traps you — nothing legal, one forced move, or nothing that gets closer to the goal — grants a token (`Rules.grants_reroll()`); `X` spends one to roll again without spending a turn. Because the token arrives *on the roll that traps you*, you always hold one exactly when a losing move would otherwise be mandatory. That is the whole reason there is no separate "decline" option: it would be the same mechanism twice.
 
 ### Scene tree — `main.tscn`
 

@@ -6,6 +6,7 @@ extends SceneTree
 ## Run: godot --headless --script tests/test_play.gd
 
 const Board = preload("res://src/board/board.gd")
+const Rules = preload("res://src/game/rules.gd")
 const Pal = preload("res://src/palette.gd")
 const TURN_CAP := 2000
 
@@ -17,10 +18,34 @@ func _initialize() -> void:
 		root.add_child(m)
 		await process_frame
 
+		# The kit is what the player picks between, so the pick has to reach the roll.
+		var kit := Rules.kit(size)
+		m._pick_die(kit.size() - 1)
+		assert(m.die_faces() == kit[kit.size() - 1], "picking a die did not change the roll")
+		m._pick_die(0)
+
 		var turns := 0
 		while not m.won and turns < TURN_CAP:
 			turns += 1
+			var before_tokens: int = m.rerolls
+			var at: PackedInt32Array = m.coords
 			m.do_roll()
+
+			# A trapped roll -- nothing legal, one forced move, or nothing that gets
+			# closer -- has to hand back a token, because that token is the only thing
+			# standing between the player and a mandatory losing move.
+			var trapped := Rules.grants_reroll(m.moves, at, size)
+			assert(m.rerolls == before_tokens + (1 if trapped else 0),
+					"reroll granted on the wrong roll")
+			assert(not trapped or m.rerolls > 0, "trapped with no way out")
+
+			# Spending a token buys another roll, not another turn.
+			if trapped and m.rerolls > 0:
+				var t: int = m.turns
+				var held: int = m.rerolls
+				m.reroll()
+				assert(m.turns == t, "a reroll cost a turn")
+				assert(m.rerolls <= held, "a reroll did not spend its token")
 			# Every marker is tinted by what it lands on -- untinted, the numbers say
 			# nothing about which move is a snake.
 			for i in m.moves.size():

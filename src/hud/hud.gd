@@ -19,19 +19,43 @@ func refresh(s: Dictionary) -> void:
 		return
 	var here := "(%s)" % ", ".join(Array(s["coords"]).map(func(v): return str(v)))
 	if s["roll"] == 0:
-		status.text = "at %s  -  turn %d  -  SPACE to roll d%d" % [here, s["turns"], s["faces"]]
-		menu.text = "%dD board %s  -  %d planes  -  %s view  -  TAB view, D dimensions, C recentre, F3 debug, R restart  -  drag to orbit, right-drag to pan, wheel to zoom" \
-				% [s["size"].size(), str(s["size"]), Board.plane_count(s["size"]), s["mode"]]
+		status.text = "at %s  -  turn %d  -  SPACE to roll d%d%s" \
+				% [here, s["turns"], s["faces"], _tokens(s)]
+		menu.text = "%s  -  %dD board %s  -  %d planes  -  %s view  -  TAB view, D dimensions, C recentre, F3 debug, R restart  -  drag to orbit, right-drag to pan, wheel to zoom" \
+				% [_kit(s), s["size"].size(), str(s["size"]), Board.plane_count(s["size"]), s["mode"]]
 		return
-	status.text = "rolled %d  -  at %s  -  turn %d" % [s["roll"], here, s["turns"]]
+	status.text = "rolled %d on d%d  -  at %s  -  turn %d%s" \
+			% [s["roll"], s["faces"], here, s["turns"], _tokens(s)]
 	var moves: Array = s["moves"]
 	if moves.is_empty():
-		menu.text = "no legal move, turn forfeit  -  SPACE to roll again"
+		menu.text = "no legal move  -  %s  -  SPACE to roll again" % _escape(s)
 		return
 	var lines := PackedStringArray()
 	for i in moves.size():
 		lines.append("%d)  %s" % [i + 1, _move_label(moves[i], s["size"], s["links"])])
+	if s["rerolls"] > 0:
+		lines.append(_escape(s))
 	menu.text = "\n".join(lines)
+
+
+func _tokens(s: Dictionary) -> String:
+	return "" if s["rerolls"] == 0 else "  -  %d reroll%s" % [s["rerolls"], "" if s["rerolls"] == 1 else "s"]
+
+
+func _escape(s: Dictionary) -> String:
+	if s["rerolls"] <= 0:
+		return "no reroll left"
+	return "X to reroll (%d left)" % s["rerolls"]
+
+
+## The kit, with the selected die marked. The number keys pick between them while no
+## markers are up, which is the same key doing the other half of its job.
+func _kit(s: Dictionary) -> String:
+	var kit: PackedInt32Array = s["kit"]
+	var parts := PackedStringArray()
+	for i in kit.size():
+		parts.append("[%d] d%d%s" % [i + 1, kit[i], " <" if i == s["die_index"] else ""])
+	return "die  " + "  ".join(parts)
 
 
 func _move_label(m: Dictionary, size: PackedInt32Array, links: Dictionary) -> String:

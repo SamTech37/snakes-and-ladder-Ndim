@@ -9,6 +9,41 @@ extends RefCounted
 
 const Board = preload("res://src/board/board.gd")
 
+## The dice the player picks between before rolling. Measured on [6,6,6]: a single d5
+## costs 13.4 rolls under optimal play and picking between d6 and d3 costs 9.4, which
+## beats every rule-level fix for the exact-landing endgame (declining a turn 10.4,
+## bouncing off the wall 10.4) and is a decision rather than a rule.
+##
+## ponytail: no d1. With a d1 a forward move is legal from every cell but the goal, so
+## it deletes the endgame, the forfeits and every reroll the player could earn -- it is
+## something to unlock, not something to hand over at the start.
+const DICE := [6, 3]
+
+
+## The kit as it exists on this board, capped and deduplicated. On a 4-wide lattice
+## both dice cap to 3, and offering the same die twice is noise.
+static func kit(size: PackedInt32Array) -> PackedInt32Array:
+	var out := PackedInt32Array()
+	for d in DICE:
+		var f := die_faces(d, size)
+		if not out.has(f):
+			out.append(f)
+	return out
+
+
+## True when this roll traps the player: nothing legal, one forced move, or nothing
+## that gets closer to the goal. Granting the token on the same roll that traps you is
+## what keeps a losing move from ever being mandatory -- you always hold one when it
+## matters, so no separate "decline" rule is needed.
+static func grants_reroll(moves: Array, from: PackedInt32Array, size: PackedInt32Array) -> bool:
+	if moves.size() <= 1:
+		return true
+	var d := Board.dist_to_goal(from, size)
+	for m in moves:
+		if Board.dist_to_goal(m["coords"], size) < d:
+			return false
+	return true
+
 
 ## d6 on a board wide enough for it. An axis of extent 5 can only ever be crossed in
 ## steps of 1..4, so a 5 or a 6 there would be a guaranteed forfeit.

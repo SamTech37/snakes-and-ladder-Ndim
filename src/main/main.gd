@@ -52,6 +52,14 @@ var rng := RandomNumberGenerator.new()
 ## using rather than snapping to the default. SPREAD is deliberately not remembered.
 var parked := {}
 
+## Which die in `Rules.kit(size)` the next roll uses. A big die is dead weight against
+## a wall -- picking the small one is how the endgame is played rather than endured.
+var die_index := 0
+
+## Spent with X to roll again without spending a turn. Earned on any roll that traps
+## you, so the compensation arrives exactly when the wall does.
+var rerolls := 0
+
 var dragging := false
 var panning := false
 
@@ -82,6 +90,8 @@ func new_game() -> void:
 	moves = []
 	won = false
 	busy = false
+	rerolls = 0
+	die_index = mini(die_index, Rules.kit(size).size() - 1)
 	rig.pan = Vector2.ZERO
 	view3d.size = size
 	player.position = view3d.world(coords)
@@ -100,13 +110,15 @@ func _refresh_hud() -> void:
 	hud.refresh({
 		"coords": coords, "size": size, "links": links, "moves": moves,
 		"roll": roll, "turns": turns, "won": won,
-		"faces": Rules.die_faces(6, size),
+		"faces": die_faces(), "kit": Rules.kit(size), "die_index": die_index,
+		"rerolls": rerolls,
 		"mode": "SPREAD" if view == View.SPREAD else "FOCUS",
 	})
 
 
+## Faces on the die currently selected.
 func die_faces() -> int:
-	return Rules.die_faces(6, size)
+	return Rules.kit(size)[die_index]
 
 
 ## Layout, camera and everything sitting on the board move together, so the deck
@@ -170,14 +182,38 @@ func _cycle_size() -> void:
 
 
 func do_roll() -> void:
+	_roll(true)
+
+
+## Spends a token to roll again on the same turn. Nothing else undoes a bad roll, so
+## this is the whole escape hatch -- and a reroll that traps you again earns another
+## token, which is what stops a run of walls from spiralling.
+func reroll() -> void:
+	if busy or won or roll == 0 or rerolls <= 0:
+		return
+	rerolls -= 1
+	_roll(false)
+
+
+func _roll(spend_turn: bool) -> void:
 	roll = rng.randi_range(1, die_faces())
-	turns += 1
+	if spend_turn:
+		turns += 1
 	moves = Board.legal_moves(coords, size, roll)
+	if Rules.grants_reroll(moves, coords, size):
+		rerolls += 1
 	ghosts.show_moves(moves, links)
 	_redraw()
 	_refresh_hud()
-	if moves.is_empty():
-		roll = 0
+
+
+## Picks a die from the kit. Only between choices -- once markers are on the board the
+## number keys are choosing one of them.
+func _pick_die(i: int) -> void:
+	if won or i >= Rules.kit(size).size():
+		return
+	die_index = i
+	_refresh_hud()
 
 
 func choose(i: int) -> void:
@@ -276,7 +312,14 @@ func _unhandled_input(event: InputEvent) -> void:
 			return
 		elif event.is_action_pressed("ui_accept") and moves.is_empty():
 			do_roll()
+		elif event.keycode == KEY_X:
+			reroll()
 		elif event.keycode >= KEY_1 and event.keycode <= KEY_9:
-			choose(event.keycode - KEY_1)
+			# Same keys, two disjoint states: markers on the board means they are
+			# choosing a move, no markers means they are choosing the next die.
+			if moves.is_empty():
+				_pick_die(event.keycode - KEY_1)
+			else:
+				choose(event.keycode - KEY_1)
 		elif event.keycode == KEY_0:
 			choose(9)
