@@ -93,7 +93,8 @@ func _fight(f: Dictionary, s: Dictionary) -> String:
 	var head: String = _hi("BOSS  %d-%d of 3" % [f["wins"], f["losses"]], Pal.C_GOAL) \
 			if foe["boss"] else _hi("FIGHT", Pal.C_FOE)
 	var last: String = "  -  %s" % f["last"] if not f["last"].is_empty() else ""
-	var vs := "  vs %s" % _hi(Rules.die_name(foe["faces"]), Pal.C_FOE)
+	# The matchup, always: your die, their die, and the contest holding them. A line that says "vs 1355" and stops has left out the half of it that is yours.
+	var matchup := "  %s vs %s" % [_hi(mine, Pal.C_MOVE), _hi(Rules.die_name(foe["faces"]), Pal.C_FOE)]
 	if f["game"] < 0:
 		# TELL: its die is on the table and the contest is yours to name. The one you are about to commit to is reversed out; the rest are just text.
 		var left := []
@@ -104,10 +105,10 @@ func _fight(f: Dictionary, s: Dictionary) -> String:
 		for i in left.size():
 			var label: String = MG.ALL[left[i]].label()
 			parts.append(_hi(label, Pal.C_MOVE) if i == f["pick"] else " %s " % label)
-		return "%s%s%s  -  UP/DOWN pick, SPACE commits:  %s%s" \
-				% [head, vs, last, "  ".join(parts), _note(s)]
-	return "%s%s%s  -  %s  -  SPACE stakes %s  (LEFT/RIGHT)%s" \
-			% [head, vs, last, _hi(MG.ALL[f["game"]].label(), Pal.C_FOE), _hi(mine, Pal.C_MOVE), _note(s)]
+		return "%s%s%s  -  UP/DOWN pick the contest, SPACE commits:  %s%s" \
+				% [head, matchup, last, "  ".join(parts), _note(s)]
+	return "%s%s under %s%s  -  LEFT/RIGHT change die, SPACE stakes%s" \
+			% [head, matchup, _hi(MG.ALL[f["game"]].label(), Pal.C_FOE), last, _note(s)]
 
 
 ## What just happened, or what the die you just picked up actually is. Carried until the next roll: a fight that ends in silence leaves you looking at a tray with one fewer die on it, and a die whose faces you cannot read is a die you cannot choose with.
