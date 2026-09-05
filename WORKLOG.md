@@ -1,5 +1,40 @@
 # Worklog
 
+## 2026-09-06 — playtest round (`feat/roguelike`, 8 commits)
+
+Everything here came out of the first hand-played runs. Nothing was found by a test; the tests came after, to hold each one down.
+
+### Dead ends found by playing
+
+**A kit could be unable to reach the goal at all.** Two `[3,3,3]` dice roll 3 and only 3, so one cell short of the goal there is no move, for ever, and every reroll comes up 3 again. `Rules.reach()` is the gcd of a die's faces and must be 1 for every die the game hands out — moves go both ways along an axis, so that is the whole condition. `damaged()` upholds it too, and `test_minigames.gd` walks every pool and every chain of damage down to the bottom. Two authored dice were locked.
+
+**The kit cap made it likely.** One die per axis meant a win over the cap forced a discard, which is how a kit becomes two of the same die and nothing else. The cap is gone; `TRAY_DICE` is only how many fit on screen.
+
+**A boss with two contests deadlocked its own third round.** Best-of-three insisted on a fresh contest each round, ran out, and drew an empty list with SPACE doing nothing.
+
+**A fight could take your last die and end the run on the first foe.** The last die is never taken now: it breaks, losing its largest face, and only shatters at two faces.
+
+### The frontend rule
+
+Every drift bug this round was one bug: state changed and something forgot to tell the view. The tray showed a die already taken; the contest panel re-derived "what is left" and disagreed with the code that commits it. `CLAUDE.md` rule 7 now says the frontend is a function of the backend, `_refresh_hud()` redraws the tray as well, and `_fight_view()` hands the screen the contest list rather than letting it work one out.
+
+### Also
+
+Results wait to be read (`YOU WON` / `YOU LOST` / `FLOOR CLEARED`, then SPACE). Climbing a floor animates — the old board falls away, the new one assembles out of its planes. 奇偶 takes a caller, so it is two contests. Draws are thrown again. Freebie dice lie on the board. `?` opens a glossary. `SHIFT+R` restarts at the first floor. The chaser steps after your move, never between the roll and it. The opening view is the fitted one — the first fit ran before the HUD had been laid out, which is why `C` appeared to "recentre" a fresh game.
+
+### Verified
+
+Six suites, all green: `test_board`, `test_play`, `test_minigames` (new — every contest case by case), `test_fight`, `test_run`, `odds`. `test_readable` 0.0% at both home angles on all four boards.
+
+Not verified: a full run played to a natural death.
+
+### Next
+
+1. **Playtest again.** Now that the dead ends are gone, whether the chase and the fights are actually *fun* is still unmeasured.
+2. **Procedural generation** (job iii) — still uniform rejection sampling for links, foes and gifts alike.
+3. **The blind commit orders** (i) and (ii).
+4. Roamers rolling their die to move, and being carried by links, per `TODO.md`.
+
 ## 2026-09-05 — the run (`feat/roguelike`, 3 commits)
 
 Design interview first: `.claude/roguelike-dice-run-spec.md`. TODO items 2 and 4 are built; item 3 is deliberately still uniform sampling.

@@ -228,10 +228,19 @@ func _refresh_hud() -> void:
 		"coords": coords, "size": size, "links": links, "moves": moves,
 		"roll": roll, "turns": turns, "won": won,
 		"kit": kit, "die_index": die_index,
-		"rerolls": rerolls, "foes": foes, "gifts": gifts, "fight": fight, "dead": dead,
+		"rerolls": rerolls, "foes": foes, "gifts": gifts, "dead": dead,
+		# The fight, with the contest list worked out here rather than worked out again by whatever is drawing it.
+		"fight": fight if fight.is_empty() else _fight_view(),
 		"roamer": roamer, "floors": floors, "notice": notice,
 		"mode": "SPREAD" if view == View.SPREAD else "FOCUS",
 	})
+
+
+## The fight as the screen needs it: the state plus the contests actually on offer this round. Anything drawing it reads this, so nothing has to re-derive a rule and get a different answer.
+func _fight_view() -> Dictionary:
+	var view := fight.duplicate()
+	view["left"] = games_left()
+	return view
 
 
 ## The tray is the kit and the rerolls, as objects. Everything the HUD used to spell
@@ -557,12 +566,16 @@ func _foe_picks(foe: Dictionary) -> int:
 	return best
 
 
-## Contests this foe has not already used. A boss plays three different ones, so a round it has won is a round it cannot repeat.
+## Contests this foe can still reach for: the ones it has not used, and all of them again once it has run out.
+##
+## A boss takes three rounds and may only carry two contests, so "a different one each round" cannot be a rule -- it was, and the third round of such a fight came up with an empty list: nothing to pick, nothing drawn, and SPACE doing nothing at all. Preferring a fresh contest is worth having; running out of them is not a state the game may be in.
 func games_left() -> Array:
 	var out := []
 	for g in fight["foe"]["games"]:
 		if not fight["used"].has(g):
 			out.append(g)
+	if out.is_empty():
+		out.assign(fight["foe"]["games"])
 	return out
 
 
@@ -571,8 +584,6 @@ func _resolve() -> void:
 	if fight["game"] < 0:
 		# TELL: the contest is whichever one is highlighted when SPACE lands.
 		var left := games_left()
-		if left.is_empty():
-			return
 		fight["game"] = left[mini(fight["pick"], left.size() - 1)]
 	var g: int = fight["game"]
 	fight["used"].append(g)

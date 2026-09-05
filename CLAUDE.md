@@ -48,13 +48,26 @@ Camera angles are also **wrapped, never clamped**, and rebased to the nearest
 equivalent angle before a tween. Orbiting nine times round and then recentring
 should take the short way, not unwind nine turns on screen.
 
-## 7. Use the Engine, Don't Rebuild It
+## 7. The Frontend Is a Function of the Backend
+
+Everything on screen — the status line, the tray, the markers, the board glyphs, every indicator — is **derived from game state on each redraw**, immediately. No update pipeline, no change notifications, no code that mutates state and then remembers to tell the view about it.
+
+This is not a preference. Every drift bug in this project has been the same bug: a place that changed state and did not tell the view. A lost boss round took a die and put the rematch up without touching the tray, so the screen showed a die that was already gone. The kit had one refresher and several mutators, and the mutators won.
+
+Two rules follow:
+
+- **The view never re-derives a rule.** If the screen needs a list, the state hands it the list. The contest panel worked out "which contests are left" itself, disagreed with the code that commits one, and drew an empty list while SPACE still had something to commit. `main.gd:_fight_view()` exists for exactly this: the turn loop computes it once and the HUD reads it.
+- **One refresh path, called from everywhere.** `_refresh_hud()` redraws the tray as well, so anything that changes anything gets both. If you find yourself adding a `_refresh_x()` call next to a mutation, the mutation is in the wrong place or the refresh is.
+
+A visual that is not a function of the data is a second copy of the data, and it drifts.
+
+## 8. Use the Engine, Don't Rebuild It
 
 Scenes, nodes, materials and the environment are authored in `.tscn` files, not constructed in `_ready()`. A script that instantiates its own camera, meshes and HUD leaves an empty scene tree and an editor with nothing to select — this was built that way once and had to be redone. Script only what cannot be authored by hand: procedural geometry, the turn loop, input.
 
 Reach for the built-in before writing one: `Tween` over hand-rolled interpolation in `_process`, `Label3D` over billboard math, `SystemFont` over a bundled font file, `ImmediateMesh` over a `SurfaceTool` wrapper, built-in input actions (`ui_accept`) over new ones.
 
-## 8. Long Jobs Run in Background
+## 9. Long Jobs Run in Background
 
 Every `godot --headless --script ...` run takes 30s to several minutes. Pass `run_in_background: true` — do not block the session, and do not chain `sleep` to poll. Batch independent runs into one background call.
 
@@ -324,3 +337,16 @@ Three effects, all `Tween`-driven into the board's own `ImmediateMesh` so they s
 ## Not Built Yet
 
 Solo play only. No menus or save. Ghost markers are chosen by number key, not clicked — numbers still work when 5D offers ten directions. A cross-panel link in SPREAD shows a stub at each end but does not say which panel it lands in; FOCUS is where you read that.
+
+## Session Wrap-Up Protocol
+
+**Trigger:** the user says "wrap up", "end of session", "let's do a wrap up" or similar.
+
+1. Commit whatever is finished and leave the tree clean.
+2. Update `WORKLOG.md`: what was done, what was measured, what is **not** verified, and what is next.
+3. Ask 2–4 targeted questions with `AskUserQuestion`, covering:
+   - which repeated manual step slowed this session (a candidate for a script or a test),
+   - which rule in this file was wrong, missing, or got in the way,
+   - which bug class showed up more than once (a candidate for an assertion rather than a note).
+4. Write the accepted answers into this file or into a test. A lesson that only lives in a commit message is a lesson that will be relearned.
+

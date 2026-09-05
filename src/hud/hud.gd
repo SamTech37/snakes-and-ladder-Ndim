@@ -105,10 +105,8 @@ func _fight(f: Dictionary, s: Dictionary) -> String:
 	var tail := "" if below.is_empty() else "\n" + _tint("  ".join(below), Pal.C_MOVE)
 	if f["game"] < 0:
 		# TELL: its die is on the table and the contest is yours to name. The one you are about to commit to is reversed out; the rest are just text.
-		var left := []
-		for g in foe["games"]:
-			if not f["used"].has(g):
-				left.append(g)
+		# Drawn from the same list the commit reads, not a second copy of the rule: the two disagreed, and the screen showed no contests at all while SPACE still had one to commit.
+		var left: Array = f["left"]
 		var parts := PackedStringArray()
 		for i in left.size():
 			var label: String = MG.ALL[left[i]].label()

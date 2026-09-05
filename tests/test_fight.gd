@@ -153,6 +153,24 @@ func _boss() -> void:
 	assert(not b.fight.is_empty() and b.fight["wins"] == 0 and b.fight["losses"] == 0,
 			"the boss did not come back for a rematch")
 	assert(not b.won, "a lost boss should not have won the floor")
+	# A boss takes three rounds and may carry only two contests. The third round used to come up with nothing on offer: no list drawn and SPACE doing nothing, with the fight stuck for good.
+	var t: Node3D = await _game()
+	t.kit = _kit([PackedInt32Array([1, 2, 3]), PackedInt32Array([1, 2, 3])])
+	var two := _foe(PackedInt32Array([3, 4, 4, 5]), [0, 1], Rules.TELL)
+	two["boss"] = true
+	t._start_fight(two, -1)
+	for _i in 4:
+		assert(not t.games_left().is_empty(), "a fight with nothing left to pick is a dead end")
+		var view: Dictionary = t._fight_view()
+		assert(not view["left"].is_empty(), "the screen would have drawn an empty contest list")
+		if t.fight["over"] != "":
+			break
+		t._resolve()
+		_read(t)
+		if t.fight.is_empty():
+			break
+	t.free()
+
 	done["boss"] = true
 	b.free()
 
