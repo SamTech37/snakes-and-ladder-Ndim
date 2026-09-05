@@ -1,3 +1,5 @@
+# Session 1
+
 1. playability [DONE]
 2. Events: Roguelike & RNG
 
@@ -21,3 +23,9 @@ non-uniform tile size (visuals only) and non-uniform grid (actual mechanism)?
 4. twist and turn continue
 
 end game ask replay or continue. continue makes the dimension goes from D to D+1, and the game continues from that point onward.
+
+---
+
+# Session 2
+
+now the presence of Snakes & Ladders feels a bit weak. we have turned this thing into a game about dices and dimensionals and odds. but what about the funsies of being thwarted back in space? (and time perhaps.)
