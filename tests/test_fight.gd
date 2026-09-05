@@ -236,6 +236,12 @@ func _keys() -> void:
 	m._start_fight(foe, 0)
 	assert(m.fight["game"] < 0, "a TELL foe should not have named the contest")
 	assert(m.fight["pick"] == 0)
+
+	# And the kit is still yours to walk through mid-fight, whoever named the contest: the die you have picked is the die you stake, and walking the kit is how you read what your own dice are.
+	var picked: int = m.die_index
+	m._cycle_die(1)
+	assert(m.die_index != picked, "the kit was locked while the foe held the naming")
+	assert(m.notice.begins_with("faces "), "picking a die mid-fight did not say what it is")
 	m._cycle_contest(1)
 	assert(m.fight["pick"] == 1, "UP/DOWN did not move the highlight")
 	var chosen: int = m.games_left()[1]

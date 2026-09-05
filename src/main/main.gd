@@ -435,7 +435,7 @@ func _click(pos: Vector2) -> void:
 		if i >= 0:
 			if fight["discard"]:
 				_discard(i)
-			elif fight["game"] >= 0:
+			elif fight["over"] == "":
 				_pick_die(i)
 		return
 	if i >= 0:
@@ -790,9 +790,8 @@ func _commit() -> void:
 func _cycle_die(step: int) -> void:
 	if kit.size() < 2:
 		return
+	# Blocked only on a result waiting to be read -- there is nothing left to choose there. It used to be blocked whenever the foe had not named a contest yet, which was wrong twice over: the die you have picked is the die you stake whoever names the contest, and it is also the only way to look at what your own dice are while a fight is on.
 	if not fight.is_empty() and fight["over"] != "":
-		return
-	if not fight.is_empty() and fight["game"] < 0 and not fight["discard"]:
 		return
 	_pick_die(posmod(die_index + step, kit.size()))
 
