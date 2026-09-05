@@ -88,9 +88,11 @@ SNL_SEED=7 DISPLAY=:0 godot --position -6000,-6000 --script tests/shot.gd -- sho
 
 `shot.gd` args: output path, size, spread (`0` stacked / `1` exploded), `roll`, and an optional `yaw,pitch`. Screenshots go to `shots/`, which is gitignored.
 
-Controls: `SPACE` **commit** — roll, reroll, or stake your die in a fight — **number keys pick a move and nothing else**, `LEFT`/`RIGHT` choose a die, `UP`/`DOWN` choose a contest, **click a die to pick it up, click a spare to spend it**, `ESC` help overlay, `M` mute, `TAB` switch SPREAD/FOCUS, `C` recentre the camera, `F3` debug view, `D` (behind `F3`) cycle board dimensions, **`SHIFT+R` restart the run**, drag to orbit, right-drag to pan, wheel to zoom.
+Controls: `SPACE` **commit** — roll, reroll, or stake your die in a fight — **number keys pick a move and nothing else**, `LEFT`/`RIGHT` choose a die, `UP`/`DOWN` choose a contest, **click a die to pick it up, click a spare to spend it**, `ESC` controls overlay, `?` glossary overlay, `M` mute, `TAB` switch SPREAD/FOCUS, `C` recentre the camera, `F3` debug view, `D` (behind `F3`) cycle board dimensions, **`SHIFT+R` restart the run at the first floor**, drag to orbit, right-drag to pan, wheel to zoom.
 
-Restart is on `SHIFT+R` because a bare `R` sits beside every key you actually use, and mispressing it wipes the game you were playing.
+Restart is on `SHIFT+R` because a bare `R` sits beside every key you actually use, and mispressing it wipes the game you were playing. **It goes back to the first floor**, not the one the run died on — starting again in 5D holding a single die is not a run. (Offering the choice is a later job.)
+
+**`?` opens a glossary**, its own overlay beside `ESC`'s controls: one is the keys, the other is what the words on screen mean, and somebody looking for either does not want to read the other.
 
 **`SPACE` means one thing: commit to what is in front of you.** No roll on the board, it throws one; a roll you cannot live with, it throws again and spends a token; mid-fight, it stakes the die you have highlighted; over the kit cap, it drops the die you have highlighted. There is no separate reroll key — a reroll *is* another throw, and `X` was a second word for one idea that nobody would have guessed.
 
@@ -101,6 +103,8 @@ Pan exists because the fit frames the whole board: zoomed in on a big lattice th
 `D` walks `Rules.SIZES` — `[6,6,6]` → `[4,4,4,4]` → `[3,3,3,3,3]` → `[10,10]` — and it is **debug-only, behind `F3`**. The floor is climbed now rather than chosen, but reaching a 5D fight by playing four floors first is no way to test one.
 
 2D is one plane with no deck to explode, so TAB only widens the spacing; it is the board everyone already knows. 5D draws and plays, and measures 0% ambiguous at both home angles, but nine decks of nine cells each leave the board small and sparse on screen — see the `_stack_offset` note about axes 4+ marching downward at a widening stride.
+
+**The camera fit runs again after the first frame.** A `Control` has no real size until it has been laid out, so at `_ready()` the status line claims a few hundred pixels of height it does not have and the opening view is framed for a text bar five times too tall. It read as the game not starting centred — pressing `C` to "recentre" was really the first honest fit. The framing also follows the window from there on (`size_changed` → `fit`), which costs the wheel zoom on a resize, and that is what a resize is asking for.
 
 `C` exists because orbit is free and it is easy to end up looking at nothing; it **flies** the camera back to the current view's own angle and forgets the parked one.
 

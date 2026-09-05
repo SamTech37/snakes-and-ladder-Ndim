@@ -119,6 +119,12 @@ func _ready() -> void:
 		rng.seed = s.to_int()
 	new_game()
 
+	# The fit frames the board below the HUD text, and a Control has no real size until it has been laid out -- at _ready() the status line claims a few hundred pixels of height it does not have, so the opening view is framed for a text bar five times too tall. It looked like the game simply did not start centred, and pressing C to "recentre" was really the first honest fit.
+	await get_tree().process_frame
+	rig.fit()
+	# And the framing follows the window from here on. The wheel zoom is lost on a resize, which is what a refit means and what a resize is asking for.
+	get_viewport().size_changed.connect(rig.fit)
+
 
 ## Deals a floor. `keep` carries the run across it: the kit is what a run *is*, so ascending must not re-deal it, while SHIFT+R must.
 func new_game(keep := false) -> void:
@@ -737,9 +743,13 @@ func _unhandled_input(event: InputEvent) -> void:
 		# Shift, because a bare R sits next to every key you actually use and wipes the
 		# game you were playing.
 		if event.keycode == KEY_R and event.shift_pressed:
-			new_game()
+			# Back to the first floor, not the one you died on. A run restarting in 5D holding one die is not a run, and picking up where the last one ended is the one thing a restart must not do.
+			_go_to(Rules.floor_size(2), false)
 		elif event.keycode == KEY_ESCAPE:
 			hud.toggle_help()
+		elif event.keycode == KEY_QUESTION or event.keycode == KEY_SLASH:
+			# Its own overlay rather than more of ESC's: one is the controls, the other is what the words on screen mean, and somebody looking for either does not want to read the other.
+			hud.toggle_glossary()
 		elif event.keycode == KEY_TAB:
 			_set_view(View.FOCUS if view == View.SPREAD else View.SPREAD)
 		elif event.keycode == KEY_C:

@@ -235,6 +235,30 @@ tray     the bright die is the one you roll; the small ones are rerolls
          the foe's die sits on the far side of the screen during a fight
 fight    one contest, one roll each — the die you stake is the one you lose"
 
+[node name="Glossary" type="Label" parent="HUD/Margin/Rows"]
+visible = false
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.66, 0.85, 1)
+theme_override_fonts/font = SubResource("Font_mono")
+theme_override_styles/normal = SubResource("Box_hud")
+theme_override_font_sizes/font_size = 16
+text = "floor 3D    which floor you are on. the floor number and the number of axes are the same number
+faces       the values on the die you have picked. a won die can read 1 1 5 5
+kit         the dice you hold. it caps at one die per axis of this floor
+chaser 4    cells the hunter must walk to reach you. it steps once per move you make,
+            and once for a reroll — time bought with no ground covered
+reroll      a spare die on the tray, earned by a roll that traps you. SPACE spends one
+
+a fight     one contest, one roll each. the boss takes two of three
+stake       the die you have picked is the die you lose. your last one is never taken,
+            it breaks: it loses its largest face, and shatters at two faces
+BIGGER      higher roll wins. a tie is a draw, thrown again, and costs nothing
+SMALLER     lower roll wins
+ODD / EVEN SUM   the two rolls are added. you pick which parity you are betting on
+
+marker      cube plain · cone up LADDER · cone down SNAKE · wedge FOE · diamond GOAL
+board       a star is a foe standing on that cell. the cage is the goal, and the boss"
+
 [node name="Controls" type="Label" parent="HUD/Margin/Rows/Help"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.62, 0.66, 0.85, 1)
@@ -246,5 +270,6 @@ number    pick a move on the board — the board's keys, only
 LEFT/RIGHT   choose a die      UP/DOWN   choose a contest
 click a die pick it up         click a spare  spend it
 TAB view    C recentre   M mute   F3 debug (then D dimensions)
-SHIFT+R restart the run        ESC close this
+?  what the words mean         ESC close this
+SHIFT+R restart the run, back at the first floor
 drag orbit    right-drag pan    wheel zoom"

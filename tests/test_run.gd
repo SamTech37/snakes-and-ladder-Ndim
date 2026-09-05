@@ -126,6 +126,20 @@ func _tokens() -> void:
 	assert(f.kit.size() == 1, "a new run did not start on a single die")
 	assert(f.kit == Rules.start_kit(f.size), "a new run started on a die odds.gd has not measured")
 	assert(f.floors == 0, "a new run kept the last one's floors")
+
+	# Restarting goes back to the first floor, not the one the last run died on. Starting again in 5D holding a single die is not a run.
+	f.size = Rules.floor_size(5)
+	f.new_game(true)
+	f._go_to(Rules.floor_size(2), false)
+	await process_frame
+	assert(f.size == Rules.floor_size(2), "restarting stayed on the floor the run ended on")
+	assert(f.kit == Rules.start_kit(f.size) and f.floors == 0, "restarting kept the dead run")
+
+	# The overlays are looked up by name, so a missing panel is a crash on the key press rather than anything visible here.
+	assert(f.hud.has_node("Margin/Rows/Help"), "no controls overlay")
+	assert(f.hud.has_node("Margin/Rows/Glossary"), "no glossary overlay for ?")
+	f.hud.toggle_glossary()
+	assert(f.hud.glossary.visible, "? did not open the glossary")
 	done["tokens"] = true
 	f.free()
 

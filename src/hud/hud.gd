@@ -14,6 +14,8 @@ const Pal = preload("res://src/palette.gd")
 
 @onready var status: RichTextLabel = $Margin/Rows/Status
 @onready var help: VBoxContainer = $Margin/Rows/Help
+## What the words on screen mean, on `?`. Its own panel rather than more of ESC's: one is the controls, the other is the vocabulary, and somebody looking for either does not want to read the other.
+@onready var glossary: Label = $Margin/Rows/Glossary
 @onready var board_line: Label = $Margin/Rows/Help/Board
 @onready var menu: Label = $Margin/Rows/Help/Moves
 
@@ -159,14 +161,22 @@ func _move_label(m: Dictionary, size: PackedInt32Array, links: Dictionary, foes:
 ## Fades rather than cuts: a panel that appears between frames reads as a glitch the
 ## same way a camera jump does.
 func toggle_help() -> void:
-	var opening := not help.visible
+	_fade_panel(help)
+
+
+func toggle_glossary() -> void:
+	_fade_panel(glossary)
+
+
+func _fade_panel(panel: CanvasItem) -> void:
+	var opening := not panel.visible
 	if opening:
-		help.modulate.a = 0.0
-		help.visible = true
+		panel.modulate.a = 0.0
+		panel.visible = true
 	var t := create_tween()
-	t.tween_property(help, "modulate:a", 1.0 if opening else 0.0, 0.15)
+	t.tween_property(panel, "modulate:a", 1.0 if opening else 0.0, 0.15)
 	if not opening:
-		t.tween_callback(func(): help.visible = false)
+		t.tween_callback(func(): panel.visible = false)
 
 
 ## Height the text actually occupies, so the camera fit can keep the board out from
