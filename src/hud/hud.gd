@@ -59,8 +59,10 @@ func _status(s: Dictionary) -> void:
 		chase = "  -  " + _tint("chaser %d" % Board.manhattan(s["coords"], s["roamer"]), Pal.C_FOE)
 	# The die, the roll and the spares are all objects on the tray now, so the line says only what the tray cannot: where you are, and what the board wants next.
 	if s["roll"] == 0:
-		status.text = "%s  -  floor %dD  -  turn %d%s  -  SPACE to roll  -  ESC help%s" \
-				% [here, s["size"].size(), s["turns"], chase, _note(s)]
+		# No turn count and no ESC prompt past the first turn: the run's score is floors cleared, the win line reports the turns, and a prompt you have already read is noise sitting where the next real thing has to go.
+		var esc := "  -  ESC help" if s["turns"] == 0 else ""
+		status.text = "%s  -  floor %dD%s  -  SPACE to roll%s%s" \
+				% [here, s["size"].size(), chase, esc, _note(s)]
 		return
 	if s["moves"].is_empty():
 		status.text = "%s  -  nothing legal from here%s%s%s" % [here, chase, _spare(s), _note(s)]
@@ -71,6 +73,19 @@ func _status(s: Dictionary) -> void:
 ## The one line a fight needs: who is across the table, what is being contested, and which half of the choice is yours. The dice themselves are on the tray -- yours in the near corner, the foe's in the far one -- so this says nothing they already show.
 func _fight(f: Dictionary, s: Dictionary) -> String:
 	var mine: String = Rules.die_name(s["kit"][s["die_index"]])
+	# A settled fight waits to be read, and says what the next press is about to do rather than making you work it out from the tray afterwards.
+	if f["over"] == "CLEARED":
+		return _hi("FLOOR CLEARED", Pal.C_GOAL) \
+				+ "  the boss is beaten  -  SPACE to climb to %dD" % (s["size"].size() + 1)
+	if f["over"] == "WON":
+		return _hi("YOU WON", Pal.C_LADDER) + "  %s  -  SPACE takes their %s" \
+				% [f["last"], Rules.die_name(f["foe"]["faces"])]
+	if f["over"] == "LOST":
+		var cost := "%s is taken" % mine
+		if s["kit"].size() == 1:
+			cost = "your last die shatters" if s["kit"][0].size() <= Rules.MIN_FACES \
+					else "your last die cracks"
+		return _hi("YOU LOST", Pal.C_SNAKE) + "  %s  -  SPACE, %s" % [f["last"], cost]
 	if f["discard"]:
 		return _hi("KIT FULL", Pal.C_GOAL) + "  LEFT/RIGHT choose, SPACE drops %s%s" \
 				% [_hi(mine, Pal.C_MOVE), _note(s)]

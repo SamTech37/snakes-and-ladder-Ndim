@@ -21,6 +21,17 @@ class Minigame extends RefCounted:
 	func favours(_faces: PackedInt32Array) -> float:
 		return 0.5
 
+	## The real chance this die beats that one at this contest, counted rather than guessed: every face against every face, which is a few dozen comparisons on the dice this game holds.
+	##
+	## This is what the player is shown, because `favours()` is a heuristic with no opponent in it -- printing it as a percentage claims something it does not know. A number on screen that looks like a probability and is not one is worse than no number.
+	func odds(mine: PackedInt32Array, theirs: PackedInt32Array) -> float:
+		var wins := 0
+		for a in mine:
+			for b in theirs:
+				if play(a, b):
+					wins += 1
+		return float(wins) / float(maxi(1, mine.size() * theirs.size()))
+
 	## Here rather than beside ALL because an inner class cannot see the outer script's statics -- but it does inherit its own base's.
 	static func mean(faces: PackedInt32Array) -> float:
 		var acc := 0.0

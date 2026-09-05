@@ -84,6 +84,7 @@ func _climb() -> void:
 	for _i in 2:
 		m.fight["game"] = 0
 		m._resolve()
+		_read(m)
 	assert(m.size.size() == before + 1, "beating the boss did not climb a dimension")
 	assert(m.size == Rules.floor_size(before + 1), "the next floor is not the board for that dimension")
 	assert(m.kit.size() == 2, "the kit did not survive the climb")
@@ -115,6 +116,12 @@ func _tokens() -> void:
 	assert(f.floors == 0, "a new run kept the last one's floors")
 	done["tokens"] = true
 	f.free()
+
+
+## A fight stops on its result and waits for SPACE before anything is applied.
+func _read(m: Node3D) -> void:
+	if not m.fight.is_empty() and m.fight["over"] != "":
+		m._settle()
 
 
 func _kit(dice: Array) -> Array[PackedInt32Array]:

@@ -88,6 +88,7 @@ func _stake() -> void:
 	assert(m.fight["game"] == 0, "an OPEN foe has to name the contest before you commit")
 	# Its die is two sixes and the contest is BIGGER, so this is a loss every time.
 	m._resolve()
+	_read(m)
 	assert(m.kit.size() == 1, "a lost fight did not take a die")
 	assert(not m.kit.has(staked), "a lost fight took a die that was not the one staked")
 	assert(m.fight.is_empty(), "the fight did not end")
@@ -108,6 +109,7 @@ func _cap() -> void:
 	m._start_fight(_foe(PackedInt32Array([1, 1]), [0], Rules.OPEN), 0)
 	# Two ones against sixes at BIGGER: a win every time.
 	m._resolve()
+	_read(m)
 	assert(m.kit.size() == cap + 1, "the prize did not reach the kit")
 	assert(m.fight["discard"], "over the cap and nothing was asked to be dropped")
 	m._discard(0)
@@ -118,6 +120,7 @@ func _cap() -> void:
 	m._lose_die(0)
 	m._start_fight(_foe(PackedInt32Array([1, 1]), [0], Rules.OPEN), 0)
 	m._resolve()
+	_read(m)
 	assert(m.kit.size() == cap and m.fight.is_empty(), "a win under the cap should not prompt")
 	done["cap"] = true
 	m.free()
@@ -133,6 +136,7 @@ func _boss() -> void:
 	m._start_fight(boss, -1)
 	var first: int = m.fight["game"]
 	m._resolve()
+	_read(m)
 	assert(m.fight["wins"] + m.fight["losses"] == 1, "one round should have resolved")
 	assert(m.fight["used"] == [first], "the contest played was not recorded as used")
 	assert(m.fight["game"] != first, "the boss repeated a contest it had already played")
@@ -152,6 +156,7 @@ func _boss() -> void:
 		guard += 1
 		b.fight["game"] = 0
 		b._resolve()
+		_read(b)
 	assert(b.kit.size() == 2, "a lost boss match did not cost exactly one die")
 	assert(not b.fight.is_empty() and b.fight["wins"] == 0 and b.fight["losses"] == 0,
 			"the boss did not come back for a rematch")
@@ -172,6 +177,7 @@ func _run_over() -> void:
 		m._start_fight(_foe(PackedInt32Array([6, 6]), [0], Rules.TELL), 0)
 		m.fight["game"] = 0
 		m._resolve()
+		_read(m)
 		if not m.dead:
 			assert(m.kit.size() == 1, "the last die was taken instead of broken")
 			# A d5 wears down to [1,2,3,4], then [1,2,3], then [1,2]: the largest face goes each time, so the die gets safer to travel with and worse to fight with.
@@ -190,6 +196,7 @@ func _run_over() -> void:
 	k.die_index = 0
 	k._start_fight(_foe(PackedInt32Array([6, 6]), [0], Rules.OPEN), 0)
 	k._resolve()
+	_read(k)
 	assert(k.kit.size() == 1 and not k.dead, "a lost fight with a spare die should take the die whole")
 	assert(k.kit[0].size() == 3, "a die was broken while another was in hand")
 
@@ -237,6 +244,12 @@ func _keys() -> void:
 			"SPACE committed a contest other than the highlighted one")
 	done["keys"] = true
 	m.free()
+
+
+## A fight stops on its result and waits for SPACE. The tests press it, because a result that applies itself in the same frame is the thing that was wrong.
+func _read(m: Node3D) -> void:
+	if not m.fight.is_empty() and m.fight["over"] != "":
+		m._settle()
 
 
 func _kit(dice: Array) -> Array[PackedInt32Array]:

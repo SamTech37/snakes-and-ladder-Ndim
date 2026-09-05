@@ -212,9 +212,15 @@ A foe carries a **commit order**, which is the 分蛋糕 split — one side fram
 
 **The chaser is never dimmed.** It is the one thing on the board that ignores which plane is lit — it is a node rather than a line in the plane mesh, and `board_view.gd` draws its next-step arrow at full brightness too. The HUD carries `chaser N` in cells, because in a projected 4D view nobody can count that by eye.
 
+**Climbing a floor is a move, so it moves.** A whole board appearing where another one was is the largest cut there could be. `_ascend()` pulls the camera back off the floor you cleared, deals the next one, and then lets it assemble: it arrives at the far end of the spread from wherever the view sits and travels to it, so the new dimension visibly puts itself together out of its own planes. `anim = false` still cuts all of it.
+
 **Losing the boss is not a wall.** You are still standing on the goal, so it comes straight back and each attempt costs a die. That is how a weak kit bleeds out instead of being locked out of the game with nothing left to do — and it is why sprinting past every optional fight is not free.
 
-**Picking a die inspects it.** A won die is `[1,1,5,5]` or `[2,2,4,6]`, and four digits on the tray say what the faces are but not what they are worth. `_inspect()` prints the faces and what each contest makes of them, straight out of `favours()`, so it cannot drift from what the dice actually do.
+**Picking a die inspects it.** A won die is `[1,1,5,5]` or `[2,2,4,6]`, and four digits on the tray say what the faces are but not what they are worth. `_inspect()` prints the faces, and — **only while a foe is on the table** — the real chance each contest gives you against that foe's die, counted face against face by `Minigame.odds()`.
+
+Not `favours()`: that is a heuristic with no opponent in it, and printing it as a percentage claims something it does not know. A number that looks like a probability and is not one is worse than no number. And not the die's name beside its faces — `d3` and `faces 1 2 3` are the same sentence twice, and for an irregular die the name is the same digits again.
+
+**A settled fight waits to be read.** `fight["over"]` holds `WON` / `LOST` / `FLOOR CLEARED` and nothing is applied until `SPACE`; the line says what that press is about to cost or pay. A fight that resolves and tidies itself away in one frame is one you find out about by counting the dice on your tray afterwards.
 
 **A fight has to announce itself three ways.** A sting, the music swapping to the fight loop (`Audio.set_music()`, ducked rather than cut), and a ring thrown at the cell it happens on. Each round plays an opposite sound and an opposite-coloured ring, and the whole status line turns `C_FOE` for as long as the fight lasts. When it ends, `notice` carries what it cost or paid until the next roll — a fight that ends in silence leaves you looking at a tray with one fewer die on it and no idea why.
 

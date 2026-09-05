@@ -159,12 +159,35 @@ func new_game(keep := false) -> void:
 
 
 ## Beating the boss is not the end of anything but the floor. The run climbs a dimension, keeps the kit it fought for, and deals again.
+## Nothing in this game cuts, and a whole board appearing where another one was is the biggest cut there could be. The floor you cleared falls away from the camera, then the next one arrives exploded into its planes and collapses into a deck -- which is the new dimension assembling itself, drawn by the one float that already describes the two layouts.
 func _ascend() -> void:
 	floors += 1
 	Audio.play("win")
 	view3d.win_burst()
+	busy = true
+	if anim:
+		var from_zoom: float = rig.zoom
+		var out := create_tween()
+		out.tween_method(func(u: float): rig.set_zoom(lerpf(from_zoom, from_zoom * 3.5, u)),
+				0.0, 1.0, 0.5).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
+		await out.finished
 	size = Rules.floor_size(size.size() + 1)
 	new_game(true)
+	if anim:
+		await _assemble()
+	busy = false
+	_refresh_hud()
+
+
+## The new floor puts itself together. It starts at the far end of the spread from wherever the view sits, so it always travels: into a deck in FOCUS, out into a row in SPREAD.
+func _assemble() -> void:
+	var to := 1.0 if view == View.SPREAD else 0.0
+	var from := 1.0 - to
+	set_spread(from)
+	var t := create_tween()
+	t.tween_method(func(u: float): set_spread(lerpf(from, to, u)), 0.0, 1.0, 0.9) \
+		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	await t.finished
 
 
 ## Board and markers follow the game state; called whenever either changes.
@@ -384,17 +407,19 @@ func _pick_die(i: int) -> void:
 	_refresh_hud()
 
 
-## Picking a die says what it is. A won die can be [1,1,5,5] or [2,2,4,6], and its name on the tray is four digits: that tells you the faces but not what they are worth, and a die you cannot read is a die you cannot choose with.
+## Picking a die says what it is: its faces, and -- only when there is a foe across the table -- the real chance each contest gives you against that foe's die.
 ##
-## The percentages come from the contests themselves (`favours()`), so this cannot drift from what the dice actually do in a fight.
+## Not the die's name: "d3" and "faces 1 2 3" are the same sentence twice, and for an irregular die the name is the same digits over again. And no percentages outside a fight, because a win chance with nothing to win against is a number that means nothing.
 func _inspect(i: int) -> void:
 	var faces: PackedInt32Array = kit[i]
-	var parts := PackedStringArray()
-	for g in MG.ALL:
-		parts.append("%s %d%%" % [g.label().to_lower(), roundi(g.favours(faces) * 100.0)])
-	notice = "%s  faces %s  -  %s" \
-			% [Rules.die_name(faces), " ".join(Array(faces).map(func(v): return str(v))),
-			"  ".join(parts)]
+	var text := "faces %s" % " ".join(Array(faces).map(func(v): return str(v)))
+	if not fight.is_empty():
+		var theirs: PackedInt32Array = fight["foe"]["faces"]
+		var parts := PackedStringArray()
+		for g in MG.ALL:
+			parts.append("%s %d%%" % [g.label().to_lower(), roundi(g.odds(faces, theirs) * 100.0)])
+		text += "  vs %s  -  %s" % [Rules.die_name(theirs), "  ".join(parts)]
+	notice = text
 
 
 ## A click that did not drag. The tray is the only thing worth clicking: a die picks
@@ -472,7 +497,7 @@ func _start_fight(foe: Dictionary, cell: int) -> void:
 	view3d.fight_flash(coords)
 	notice = ""
 	fight = {"foe": foe, "cell": cell, "game": -1, "pick": 0, "wins": 0, "losses": 0,
-			"used": [], "discard": false, "last": ""}
+			"used": [], "discard": false, "last": "", "over": ""}
 	tray.set_foe(foe["faces"])
 	_next_round()
 
@@ -534,25 +559,36 @@ func _resolve() -> void:
 	# A boss takes two of three; everything else is settled on the one roll.
 	var need := 2 if foe["boss"] else 1
 	if fight["wins"] >= need:
-		_fight_won()
+		# Settled, but not yet applied. The result stops here and waits to be read: a fight that resolves and cleans itself up in the same frame is a fight you only find out about by counting the dice on your tray afterwards.
+		fight["over"] = "CLEARED" if foe["boss"] else "WON"
+		Audio.play("ladder")
 	elif fight["losses"] >= need:
-		_fight_lost()
+		fight["over"] = "LOST"
+		Audio.play("snake")
 	else:
 		_next_round()
 	_refresh_hud()
 
 
-func _fight_won() -> void:
-	var foe: Dictionary = fight["foe"]
-	Audio.play("ladder")
-	notice = "WON the fight  -  took %s" % Rules.die_name(foe["faces"])
-	if foe["boss"]:
+## SPACE on a decided fight. Reading the result is a beat of its own, so this is where what it costs or pays actually happens.
+func _settle() -> void:
+	var over: String = fight["over"]
+	fight["over"] = ""
+	if over == "LOST":
+		_fight_lost()
+	elif over == "CLEARED":
 		_end_fight()
 		if boss_fight:
 			_ascend()
 		else:
 			_win()
-		return
+	else:
+		_fight_won()
+
+
+func _fight_won() -> void:
+	var foe: Dictionary = fight["foe"]
+	notice = "WON the fight  -  took %s" % Rules.die_name(foe["faces"])
 	foes.erase(fight["cell"])
 	kit.append(foe["faces"])
 	# Over the cap, taking a die means dropping one. That is the whole cost of winning: the kit's shape is bounded even when your luck is not.
@@ -565,7 +601,6 @@ func _fight_won() -> void:
 
 func _fight_lost() -> void:
 	var foe: Dictionary = fight["foe"]
-	Audio.play("snake")
 	foes.erase(fight["cell"])
 	_pay_for_loss()
 	if dead:
@@ -732,6 +767,8 @@ func _commit() -> void:
 	if not fight.is_empty():
 		if fight["discard"]:
 			_discard(die_index)
+		elif fight["over"] != "":
+			_settle()
 		else:
 			_resolve()
 		return
@@ -743,14 +780,18 @@ func _commit() -> void:
 
 ## LEFT/RIGHT walk the kit: which die you are about to throw, which die you are staking, which die you are about to drop. Same key, one idea, in all three.
 func _cycle_die(step: int) -> void:
-	if kit.size() < 2 or (not fight.is_empty() and fight["game"] < 0 and not fight["discard"]):
+	if kit.size() < 2:
+		return
+	if not fight.is_empty() and fight["over"] != "":
+		return
+	if not fight.is_empty() and fight["game"] < 0 and not fight["discard"]:
 		return
 	_pick_die(posmod(die_index + step, kit.size()))
 
 
 ## UP/DOWN walk the contests a foe has left, when the foe is the one who showed its die first and left the naming to you.
 func _cycle_contest(step: int) -> void:
-	if fight.is_empty() or fight["discard"] or fight["game"] >= 0:
+	if fight.is_empty() or fight["discard"] or fight["game"] >= 0 or fight["over"] != "":
 		return
 	var left := games_left()
 	if left.size() < 2:
