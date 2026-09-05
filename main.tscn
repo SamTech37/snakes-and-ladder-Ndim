@@ -1,0 +1,75 @@
+[gd_scene format=3 uid="uid://b44knmji7m165"]
+
+[ext_resource type="Script" path="res://main.gd" id="1_main"]
+[ext_resource type="PackedScene" path="res://ghost.tscn" id="2_ghost"]
+
+[sub_resource type="Environment" id="Env_neon"]
+background_mode = 1
+background_color = Color(0.01, 0.01, 0.04, 1)
+tonemap_mode = 3
+glow_enabled = true
+glow_intensity = 1.1
+glow_bloom = 0.35
+glow_hdr_threshold = 0.5
+
+[sub_resource type="StandardMaterial3D" id="Mat_lines"]
+shading_mode = 0
+vertex_color_use_as_albedo = true
+
+[sub_resource type="ImmediateMesh" id="Mesh_grid"]
+
+[sub_resource type="StandardMaterial3D" id="Mat_player"]
+shading_mode = 0
+albedo_color = Color(1.6, 1.5, 0.6, 1)
+
+[sub_resource type="SphereMesh" id="Mesh_player"]
+material = SubResource("Mat_player")
+radius = 0.3
+height = 0.6
+
+[node name="Main" type="Node3D" unique_id=1721023586]
+script = ExtResource("1_main")
+ghost_scene = ExtResource("2_ghost")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=73899752]
+environment = SubResource("Env_neon")
+
+[node name="CamRig" type="Node3D" parent="." unique_id=1400075726]
+
+[node name="Camera3D" type="Camera3D" parent="CamRig" unique_id=1965423159]
+
+[node name="Grid" type="MeshInstance3D" parent="." unique_id=1429046353]
+material_override = SubResource("Mat_lines")
+mesh = SubResource("Mesh_grid")
+
+[node name="Ghosts" type="Node3D" parent="." unique_id=434477887]
+
+[node name="Player" type="MeshInstance3D" parent="." unique_id=2070865223]
+mesh = SubResource("Mesh_player")
+
+[node name="HUD" type="CanvasLayer" parent="." unique_id=1937211291]
+
+[node name="Margin" type="MarginContainer" parent="HUD" unique_id=778811747]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 24
+theme_override_constants/margin_top = 24
+theme_override_constants/margin_right = 24
+theme_override_constants/margin_bottom = 24
+
+[node name="Rows" type="VBoxContainer" parent="HUD/Margin" unique_id=1671586747]
+layout_mode = 2
+
+[node name="Status" type="Label" parent="HUD/Margin/Rows" unique_id=665035775]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.6, 1, 1, 1)
+theme_override_font_sizes/font_size = 28
+text = "SPACE to roll"
+
+[node name="Moves" type="Label" parent="HUD/Margin/Rows" unique_id=298096893]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.8, 0.9, 1, 1)
+theme_override_font_sizes/font_size = 20

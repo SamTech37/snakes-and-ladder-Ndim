@@ -1,16 +1,12 @@
-[gd_scene load_steps=8 format=3]
+[gd_scene load_steps=11 format=3]
 
 [ext_resource type="Script" path="res://src/main/main.gd" id="1_main"]
 [ext_resource type="PackedScene" path="res://src/ghost/ghost.tscn" id="2_ghost"]
 
 [sub_resource type="Environment" id="Env_neon"]
 background_mode = 1
-background_color = Color(0.01, 0.01, 0.04, 1)
-tonemap_mode = 3
-glow_enabled = true
-glow_intensity = 1.1
-glow_bloom = 0.35
-glow_hdr_threshold = 0.5
+background_color = Color(0, 0, 0, 1)
+tonemap_mode = 0
 
 [sub_resource type="StandardMaterial3D" id="Mat_lines"]
 shading_mode = 0
@@ -20,12 +16,20 @@ vertex_color_use_as_albedo = true
 
 [sub_resource type="StandardMaterial3D" id="Mat_player"]
 shading_mode = 0
-albedo_color = Color(1.6, 1.5, 0.6, 1)
+albedo_color = Color(1, 1, 1, 1)
 
 [sub_resource type="SphereMesh" id="Mesh_player"]
 material = SubResource("Mat_player")
-radius = 0.3
-height = 0.6
+radius = 0.26
+height = 0.52
+radial_segments = 12
+rings = 6
+
+[sub_resource type="ImmediateMesh" id="Mesh_cross"]
+
+[sub_resource type="SystemFont" id="Font_mono"]
+font_names = PackedStringArray("JetBrains Mono", "DejaVu Sans Mono", "Liberation Mono", "monospace")
+subpixel_positioning = 0
 
 [node name="Main" type="Node3D"]
 script = ExtResource("1_main")
@@ -47,6 +51,10 @@ mesh = SubResource("Mesh_grid")
 [node name="Player" type="MeshInstance3D" parent="."]
 mesh = SubResource("Mesh_player")
 
+[node name="Crosshair" type="MeshInstance3D" parent="Player"]
+material_override = SubResource("Mat_lines")
+mesh = SubResource("Mesh_cross")
+
 [node name="HUD" type="CanvasLayer" parent="."]
 
 [node name="Margin" type="MarginContainer" parent="HUD"]
@@ -65,11 +73,13 @@ layout_mode = 2
 
 [node name="Status" type="Label" parent="HUD/Margin/Rows"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.6, 1, 1, 1)
-theme_override_font_sizes/font_size = 28
+theme_override_colors/font_color = Color(0.55, 1, 0.8, 1)
+theme_override_fonts/font = SubResource("Font_mono")
+theme_override_font_sizes/font_size = 22
 text = "SPACE to roll"
 
 [node name="Moves" type="Label" parent="HUD/Margin/Rows"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.8, 0.9, 1, 1)
-theme_override_font_sizes/font_size = 20
+theme_override_colors/font_color = Color(0.62, 0.66, 0.85, 1)
+theme_override_fonts/font = SubResource("Font_mono")
+theme_override_font_sizes/font_size = 16

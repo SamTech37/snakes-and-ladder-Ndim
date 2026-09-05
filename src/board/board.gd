@@ -50,6 +50,31 @@ static func coords_to_world(c: PackedInt32Array, size: PackedInt32Array) -> Vect
 	return Vector3(xyz[0], xyz[1], xyz[2])
 
 
+## True when the edge running from `c` along axis `k` lies on the *open* shell:
+## at least `n - 2` of the other axes sitting on the extreme named by `keep`.
+##
+## `keep[j]` is the far extreme of axis j from wherever the camera is. Drawing only
+## those turns the lattice into an open box seen from inside — three walls, no near
+## wall. Drawing all six instead superimposes the near grid on the far one, which is
+## the moire that made the board unreadable no matter how the colors were tuned.
+static func on_open_faces(c: PackedInt32Array, size: PackedInt32Array, k: int, keep: PackedInt32Array) -> bool:
+	var n := size.size()
+	if n <= 2:
+		return true
+	var pinned := 0
+	for j in n:
+		if j != k and c[j] == keep[j]:
+			pinned += 1
+	return pinned >= n - 2
+
+
+static func manhattan(a: PackedInt32Array, b: PackedInt32Array) -> int:
+	var d := 0
+	for k in a.size():
+		d += absi(a[k] - b[k])
+	return d
+
+
 static func goal_coords(size: PackedInt32Array) -> PackedInt32Array:
 	var c := PackedInt32Array()
 	for s in size:
@@ -81,21 +106,32 @@ static func legal_moves(c: PackedInt32Array, size: PackedInt32Array, roll: int) 
 
 ## `count` teleports as {from_index: to_index}. Positive delta = ladder, negative = snake.
 ## A cell is never both a source and a destination (no chains), and start/goal are untouched.
-static func gen_links(size: PackedInt32Array, count: int, rng: RandomNumberGenerator) -> Dictionary:
+##
+## `max_span` caps the Manhattan reach of a link (0 = uncapped). Endpoints drawn from
+## anywhere in the lattice produce links that cross the whole board: visually a
+## hairball of full-width lines, and a single ladder skipping most of the game.
+static func gen_links(size: PackedInt32Array, count: int, rng: RandomNumberGenerator, max_span := 0) -> Dictionary:
 	var n := total_cells(size)
 	var goal := n - 1
 	var links := {}
 	var used := {0: true, goal: true}
 	var attempts := 0
-	while links.size() < count and attempts < count * 100:
+	# Rejection sampling: a span cap throws away most random pairs, so the budget has
+	# to be generous or short boards come back with fewer links than asked for.
+	while links.size() < count and attempts < count * 500:
 		attempts += 1
 		var a := rng.randi_range(0, n - 1)
 		var b := rng.randi_range(0, n - 1)
 		if used.has(a) or used.has(b) or a == b:
 			continue
-		if dist_to_goal(index_to_coords(a, size), size) == dist_to_goal(index_to_coords(b, size), size):
+		var ca := index_to_coords(a, size)
+		var cb := index_to_coords(b, size)
+		if max_span > 0 and manhattan(ca, cb) > max_span:
+			continue
+		if dist_to_goal(ca, size) == dist_to_goal(cb, size):
 			continue
 		links[a] = b
 		used[a] = true
 		used[b] = true
 	return links
+
