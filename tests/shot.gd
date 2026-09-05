@@ -27,6 +27,7 @@ func _initialize() -> void:
 	# no markers at all and printed three null-access errors.
 	await process_frame
 
+	m.debug = args.has("debug")
 	if args.size() > 3 and args[3] == "roll":
 		m.do_roll()
 	# Straight to the end state of the view rather than waiting on the tween.

@@ -33,13 +33,28 @@ For multi-step tasks, state a brief plan:
 - Use case-insensitive search by default (`grep -i`) unless specified otherwise
 - When the user provides a spec with N items, verify each one individually and report [Unverified] for any you couldn't confirm
 
-## 6. Use the Engine, Don't Rebuild It
+## 6. Nothing Moves Instantly
+
+Every change to the camera or the pieces is tweened. An instant jump costs the
+player their bearings and reads as a glitch rather than a move — a cut is not
+feedback. This covers the view switch, `C` recentring, the die's hop, and a snake
+or ladder dragging you somewhere.
+
+Break it only with a stated reason, and say what the reason is in a comment. The
+one standing exception is `anim = false`, which exists so `test_play.gd` can run
+whole games without waiting on real time.
+
+Camera angles are also **wrapped, never clamped**, and rebased to the nearest
+equivalent angle before a tween. Orbiting nine times round and then recentring
+should take the short way, not unwind nine turns on screen.
+
+## 7. Use the Engine, Don't Rebuild It
 
 Scenes, nodes, materials and the environment are authored in `.tscn` files, not constructed in `_ready()`. A script that instantiates its own camera, meshes and HUD leaves an empty scene tree and an editor with nothing to select — this was built that way once and had to be redone. Script only what cannot be authored by hand: procedural geometry, the turn loop, input.
 
 Reach for the built-in before writing one: `Tween` over hand-rolled interpolation in `_process`, `Label3D` over billboard math, `SystemFont` over a bundled font file, `ImmediateMesh` over a `SurfaceTool` wrapper, built-in input actions (`ui_accept`) over new ones.
 
-## 7. Long Jobs Run in Background
+## 8. Long Jobs Run in Background
 
 Every `godot --headless --script ...` run takes 30s to several minutes. Pass `run_in_background: true` — do not block the session, and do not chain `sleep` to poll. Batch independent runs into one background call.
 
@@ -64,11 +79,15 @@ SNL_SEED=7 DISPLAY=:0 godot --position -6000,-6000 --script tests/shot.gd -- sho
 
 `shot.gd` args: output path, size, spread (`0` stacked / `1` exploded), `roll`, and an optional `yaw,pitch`. Screenshots go to `shots/`, which is gitignored.
 
-Controls: `SPACE` roll, number keys pick a move, `TAB` switch SPREAD/FOCUS, `D` cycle board dimensions, `C` recentre the camera, `R` restart, drag to orbit, wheel to zoom.
+Controls: `SPACE` roll, number keys pick a move, `TAB` switch SPREAD/FOCUS, `D` cycle board dimensions, `C` recentre the camera, `F3` debug view, `R` restart, drag to orbit, wheel to zoom.
 
 `D` walks `Main.SIZES` — `[6,6,6]` → `[4,4,4,4]` → `[3,3,3,3,3]`. The higher-dimensional boards have to be reachable from inside the game, not only by editing an export.
 
-`C` exists because orbit is free and it is easy to end up looking at nothing; it puts the camera back at the current view's own angle.
+`C` exists because orbit is free and it is easy to end up looking at nothing; it **flies** the camera back to the current view's own angle and forgets the parked one.
+
+`F3` toggles a debug view: an arrow per lattice axis drawn from the start cell along the direction a `+1` step on that axis actually moves — **X red, Y green, Z blue, W yellow, V magenta, U cyan** — with a tick per cell, plus a HUD line giving yaw, pitch, zoom and spread. The directions are read back out of the projection rather than assumed, so they stay honest for W and V and right through the spread tween.
+
+Orbit is **unclamped in both axes**. Pitch used to stop just short of overhead; past vertical the view is upside down and horizontal drag reverses, which is simply what a free orbit on an Euler rig does.
 
 `SNL_SEED` pins the board so two screenshots can be compared; unset, it randomizes.
 

@@ -22,6 +22,17 @@ const C_LADDER := Color(0.49, 1.0, 0.31)
 const C_SNAKE := Color(1.0, 0.24, 0.60)
 const C_GOAL := Color(1.0, 0.89, 0.25)
 
+## Debug gizmo, one per lattice axis in AXIS_NAMES order: X Y Z W V U.
+const AXIS_COLOR_NAMES := ["red", "green", "blue", "yellow", "magenta", "cyan"]
+const C_AXIS := [
+	Color(1.0, 0.28, 0.28),
+	Color(0.35, 1.0, 0.35),
+	Color(0.40, 0.58, 1.0),
+	Color(1.0, 0.85, 0.20),
+	Color(1.0, 0.40, 1.0),
+	Color(0.35, 1.0, 1.0),
+]
+
 ## What a plane that is neither yours nor a destination drops to. Dimmed, not hidden:
 ## the stack has to stay visible or FOCUS stops being a view of the board.
 const DIM := 0.22
@@ -99,6 +110,9 @@ var pitch := A_ISO.y
 ## Where the camera was left in FOCUS, so TAB-ing back returns to the angle you were
 ## using rather than snapping to the default. SPREAD is deliberately not remembered.
 var parked := {}
+
+## F3: axis gizmo plus a numeric camera readout.
+var debug := false
 var zoom := 20.0
 ## Half the board's depth along the view axis, so the camera can be pulled back clear
 ## of the nearest plane rather than starting inside the stack.
@@ -174,8 +188,38 @@ func _draw_board() -> void:
 		_plane_frame(im, p, (C_HERE if p == here else C_FRAME) * _fade(p, lit))
 
 	_star(im, _world(Board.goal_coords(size)), 0.45, C_GOAL)
+	if debug:
+		_draw_axes(im)
 	im.surface_end()
 	_draw_links(lit)
+
+
+## One arrow per lattice axis, from the start cell along the direction a +1 step on
+## that axis actually moves. Taken from the projection rather than assumed, so it
+## stays correct for W and V and all the way through the spread tween.
+func _draw_axes(im: ImmediateMesh) -> void:
+	var base := Board.index_to_coords(0, size)
+	var origin := _world(base)
+	for k in size.size():
+		if size[k] < 2:
+			continue
+		var one := base.duplicate()
+		one[k] = 1
+		var step := _world(one) - origin
+		if step.length() < 0.001:
+			continue
+		var dir := step.normalized()
+		var color: Color = C_AXIS[k % C_AXIS.size()]
+		var tip := origin + dir * 3.5
+		_line(im, origin, tip, color)
+		# Barbs, so the arrow still reads when the axis points at the camera.
+		var side := _perp(dir) * 0.25
+		_line(im, tip, tip - dir * 0.6 + side, color)
+		_line(im, tip, tip - dir * 0.6 - side, color)
+		# A tick per cell, so the axis is countable as well as directional.
+		for i in range(1, mini(size[k], 7)):
+			var at := origin + step * float(i)
+			_line(im, at - side * 0.6, at + side * 0.6, color)
 
 
 ## Links are real geometry, not lines and not billboards: a shaft cylinder, a cone
@@ -359,6 +403,7 @@ func _set_view(v: View) -> void:
 	# nine times round leaves yaw nine turns from where it started, and a plain lerp
 	# to the stored angle then unwinds every one of them on screen.
 	yaw = to_angle.x + wrapf(yaw - to_angle.x, -PI, PI)
+	pitch = to_angle.y + wrapf(pitch - to_angle.y, -PI, PI)
 	var from_angle := Vector2(yaw, pitch)
 	var from_spread := spread
 	var to_spread := 1.0 if v == View.SPREAD else 0.0
@@ -378,6 +423,24 @@ func _cycle_size() -> void:
 	var i := SIZES.find(size)
 	size = SIZES[(i + 1) % SIZES.size()] if i >= 0 else SIZES[0]
 	new_game()
+
+
+## Flies the camera to an angle instead of snapping to it. Nothing that moves the
+## camera should cut: an instant jump costs the player their bearings and reads as a
+## glitch rather than a move.
+func _tween_angle(to: Vector2, secs := 0.45) -> void:
+	# Same shortest-way rebase as the view switch, so a reset after several turns of
+	# orbiting does not unwind all of them on screen.
+	yaw = to.x + wrapf(yaw - to.x, -PI, PI)
+	pitch = to.y + wrapf(pitch - to.y, -PI, PI)
+	var from := Vector2(yaw, pitch)
+	var t := create_tween()
+	t.tween_method(func(u: float):
+			var a := from.lerp(to, u)
+			yaw = a.x
+			pitch = a.y
+			_frame_camera(), 0.0, 1.0, secs) \
+		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
 
 
 func _view_angle(v: View) -> Vector2:
@@ -437,6 +500,23 @@ func _move_label(m: Dictionary) -> String:
 
 
 func _refresh_hud() -> void:
+	_write_hud()
+	if debug:
+		menu.text += "\n" + _debug_line()
+
+
+## Camera numbers and the axis legend, so an orbit that ends up somewhere strange can
+## be read rather than guessed at. Colours match the gizmo drawn by _draw_axes().
+func _debug_line() -> String:
+	var legend := PackedStringArray()
+	for k in size.size():
+		var name := AXIS_NAMES[k] if k < AXIS_NAMES.length() else str(k)
+		legend.append("%s %s" % [name, AXIS_COLOR_NAMES[k % AXIS_COLOR_NAMES.size()]])
+	return "dbg  yaw %+.2f (%+.0f deg)  pitch %+.2f (%+.0f deg)  zoom %.1f  spread %.2f  |  %s" % [
+			yaw, rad_to_deg(yaw), pitch, rad_to_deg(pitch), zoom, spread, ",  ".join(legend)]
+
+
+func _write_hud() -> void:
 	if won:
 		status.text = "WIN in %d turns  -  R to restart" % turns
 		menu.text = ""
@@ -445,7 +525,7 @@ func _refresh_hud() -> void:
 	var mode := "SPREAD" if view == View.SPREAD else "FOCUS"
 	if roll == 0:
 		status.text = "at %s  -  turn %d  -  SPACE to roll d%d" % [here, turns, die_faces()]
-		menu.text = "%dD board %s  -  %d planes  -  %s view  -  TAB view, D dimensions, C recentre camera, R restart  -  drag to orbit, wheel to zoom" \
+		menu.text = "%dD board %s  -  %d planes  -  %s view  -  TAB view, D dimensions, C recentre, F3 debug, R restart  -  drag to orbit, wheel to zoom" \
 				% [size.size(), str(size), Board.plane_count(size), mode]
 		return
 	status.text = "rolled %d  -  at %s  -  turn %d" % [roll, here, turns]
@@ -545,10 +625,12 @@ func _unhandled_input(event: InputEvent) -> void:
 		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN and event.pressed:
 			_set_zoom(zoom * 1.1)
 	elif event is InputEventMouseMotion and dragging:
-		# Wrapped, so yaw never drifts to some large multiple of a turn away from the
-		# angles it gets compared against.
+		# Both wrapped, never clamped, so neither drifts to some large multiple of a
+		# turn away from the angles it gets compared against. Pitch used to stop just
+		# short of overhead; past vertical the view is upside down and horizontal drag
+		# reverses, which is what a free orbit on an Euler rig does.
 		yaw = wrapf(yaw - event.relative.x * 0.006, -PI, PI)
-		pitch = clampf(pitch - event.relative.y * 0.006, -1.4, 1.4)
+		pitch = wrapf(pitch - event.relative.y * 0.006, -PI, PI)
 		rig.rotation = Vector3(pitch, yaw, 0.0)
 	elif event is InputEventKey and event.pressed and not event.echo:
 		# ponytail: R, TAB and the number keys read raw keycodes rather than adding
@@ -559,15 +641,16 @@ func _unhandled_input(event: InputEvent) -> void:
 			_set_view(View.FOCUS if view == View.SPREAD else View.SPREAD)
 		elif event.keycode == KEY_C:
 			# Orbit is free, which means it is easy to end up looking at nothing.
-			# C puts the camera back where the current view wants it, and forgets the
-			# parked angle so the reset is not undone on the next trip through TAB.
-			var a := _view_angle(view)
-			yaw = a.x
-			pitch = a.y
+			# C flies the camera back to where the current view wants it, and forgets
+			# the parked angle so the reset is not undone on the next trip through TAB.
 			parked.erase(view)
-			_frame_camera()
+			_tween_angle(_view_angle(view))
 		elif event.keycode == KEY_D:
 			_cycle_size()
+		elif event.keycode == KEY_F3:
+			debug = not debug
+			_draw_board()
+			_refresh_hud()
 		elif busy or won:
 			return
 		elif event.is_action_pressed("ui_accept") and moves.is_empty():
