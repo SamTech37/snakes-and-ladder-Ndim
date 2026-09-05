@@ -220,9 +220,11 @@ A foe carries a **commit order**, which is the 分蛋糕 split — one side fram
 
 **Losing the boss is not a wall.** You are still standing on the goal, so it comes straight back and each attempt costs a die. That is how a weak kit bleeds out instead of being locked out of the game with nothing left to do — and it is why sprinting past every optional fight is not free.
 
-**Picking a die inspects it.** A won die is `[1,1,5,5]` or `[2,2,4,6]`, and four digits on the tray say what the faces are but not what they are worth. `_inspect()` prints the faces, and — **only while a foe is on the table** — the real chance each contest gives you against that foe's die, counted face against face by `Minigame.odds()`.
+**Picking a die shows its faces, and nothing else.** No odds. Two versions of a readout have been in here and both were wrong: `favours()` as a percentage claimed a probability it could not know, and the exact per-contest chance that replaced it was worse — **a correct number beside every option is a solver.** Reading the largest one and pressing SPACE is not a decision, and the fight has no other one in it. Both dice are on screen and both are legible; working out that `1155` is poor against `1166` at BIGGER is the whole fight.
 
-Not `favours()`: that is a heuristic with no opponent in it, and printing it as a percentage claims something it does not know. A number that looks like a probability and is not one is worse than no number. And not the die's name beside its faces — `d3` and `faces 1 2 3` are the same sentence twice, and for an irregular die the name is the same digits again.
+Not the die's name beside its faces either — `d3` and `faces 1 2 3` are the same sentence twice, and for an irregular die the name is the same digits again.
+
+`favours()` survives because the *foe* needs it to pick a contest. It never reaches the player.
 
 **A settled fight waits to be read.** `fight["over"]` holds `WON` / `LOST` / `FLOOR CLEARED` and nothing is applied until `SPACE`; the line says what that press is about to cost or pay. A fight that resolves and tidies itself away in one frame is one you find out about by counting the dice on your tray afterwards.
 

@@ -414,19 +414,13 @@ func _pick_die(i: int) -> void:
 	_refresh_hud()
 
 
-## Picking a die says what it is: its faces, and -- only when there is a foe across the table -- the real chance each contest gives you against that foe's die.
+## Picking a die says what it is: its faces, and nothing else.
 ##
-## Not the die's name: "d3" and "faces 1 2 3" are the same sentence twice, and for an irregular die the name is the same digits over again. And no percentages outside a fight, because a win chance with nothing to win against is a number that means nothing.
+## It used to print your chance at each contest, computed exactly. That was worse than the heuristic it replaced, not better -- a correct number beside every option is a solver, and reading the largest one and pressing SPACE is not a decision. Both dice are on screen and both are legible; working out that 1155 is poor against 1166 at BIGGER is the fight.
+##
+## Not the die's name either: "d3" and "faces 1 2 3" are the same sentence twice, and for an irregular die the name is the same digits again.
 func _inspect(i: int) -> void:
-	var faces: PackedInt32Array = kit[i]
-	var text := "faces %s" % " ".join(Array(faces).map(func(v): return str(v)))
-	if not fight.is_empty():
-		var theirs: PackedInt32Array = fight["foe"]["faces"]
-		var parts := PackedStringArray()
-		for g in MG.ALL:
-			parts.append("%s %d%%" % [g.label().to_lower(), roundi(g.odds(faces, theirs) * 100.0)])
-		text += "  vs %s  -  %s" % [Rules.die_name(theirs), "  ".join(parts)]
-	notice = text
+	notice = "faces %s" % " ".join(Array(kit[i]).map(func(v): return str(v)))
 
 
 ## A click that did not drag. The tray is the only thing worth clicking: a die picks
