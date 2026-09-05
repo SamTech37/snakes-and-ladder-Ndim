@@ -8,7 +8,7 @@ extends SceneTree
 ## Args, all optional: output path, board size, spread (0 stacked / 1 exploded), and
 ## "roll" to take a turn first so the numbered move markers are in frame. A fifth
 ## "yaw,pitch" argument overrides the default isometric angle. "debug" adds the axis
-## gizmo, "help" opens the ESC overlay.
+## gizmo, "help" opens the ESC overlay, "spares" puts rerolls on the tray.
 
 func _initialize() -> void:
 	_hide_window()
@@ -31,6 +31,9 @@ func _initialize() -> void:
 	m.view3d.debug = args.has("debug")
 	if args.has("help"):
 		m.hud.toggle_help()
+	if args.has("spares"):
+		m.rerolls = 3
+		m._refresh_tray()
 	if args.size() > 3 and args[3] == "roll":
 		m.do_roll()
 	# Straight to the end state of the view rather than waiting on the tween.

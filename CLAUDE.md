@@ -85,7 +85,9 @@ SNL_SEED=7 DISPLAY=:0 godot --position -6000,-6000 --script tests/shot.gd -- sho
 
 `shot.gd` args: output path, size, spread (`0` stacked / `1` exploded), `roll`, and an optional `yaw,pitch`. Screenshots go to `shots/`, which is gitignored.
 
-Controls: `SPACE` roll, number keys pick a move — or pick the die when no move is pending — `X` spend a reroll, `ESC` help overlay, `M` mute, `TAB` switch SPREAD/FOCUS, `D` cycle board dimensions, `C` recentre the camera, `F3` debug view, `R` restart, drag to orbit, right-drag to pan, wheel to zoom.
+Controls: `SPACE` roll the picked die, number keys pick a move — or pick the die when no move is pending — `X` spend a reroll, **click a die to pick it up, click a spare to spend it**, `ESC` help overlay, `M` mute, `TAB` switch SPREAD/FOCUS, `D` cycle board dimensions, `C` recentre the camera, `F3` debug view, **`SHIFT+R` restart**, drag to orbit, right-drag to pan, wheel to zoom.
+
+Restart is on `SHIFT+R` because a bare `R` sits beside every key you actually use, and mispressing it wipes the game you were playing.
 
 Pan exists because the fit frames the whole board: zoomed in on a big lattice there is otherwise no way to reach the corner being played in. It is an offset on top of the fitted pivot, so a refit keeps it; `C` flies it back to zero along with the orbit.
 
@@ -113,6 +115,7 @@ src/camera/cam_rig.gd            on CamRig: yaw, pitch, zoom, pan, the fit, the 
 src/ghost/ghosts.gd              on Ghosts: the numbered markers
 src/ghost/ghost.tscn             one marker, instanced per legal move
 src/hud/hud.gd                   on HUD: formats the text, changes no state
+src/dice/tray.gd                 on Tray: the dice and the spare rerolls, as objects
 src/autoload/audio.gd            autoload `Audio`: every sound, synthesised, no files
 src/palette.gd                   every color in the game
 tests/                           test_board.gd, test_play.gd, odds.gd, test_readable.gd, shot.gd
@@ -174,7 +177,7 @@ Pick a die, roll it for step size, then pick an axis and direction. A move that 
 
 **No d1.** With a d1 a forward move is legal from every cell but the goal, which deletes the endgame, the forfeits and every reroll. It is something to unlock, not to hand over at the start.
 
-**Rerolls are the only escape hatch.** A roll that traps you — nothing legal, one forced move, or nothing that gets closer to the goal — grants a token (`Rules.grants_reroll()`); `X` spends one to roll again without spending a turn. Because the token arrives *on the roll that traps you*, you always hold one exactly when a losing move would otherwise be mandatory. That is the whole reason there is no separate "decline" option: it would be the same mechanism twice.
+**Rerolls are the only escape hatch.** A roll that traps you — nothing legal, one forced move, or nothing that gets closer to the goal — grants a spare die on the tray (`Rules.grants_reroll()`), which kicks as it arrives so the way out announces itself; clicking a spare, or `X`, spends one to roll again without spending a turn. Because the token arrives *on the roll that traps you*, you always hold one exactly when a losing move would otherwise be mandatory. That is the whole reason there is no separate "decline" option: it would be the same mechanism twice.
 
 ### Scene tree — `main.tscn`
 
@@ -211,6 +214,16 @@ They have to stay visibly different. Two separate changes have collapsed the dis
 - **`--headless` cannot render.** It uses the dummy rasterizer; `--headless --rendering-driver vulkan` hangs outright. Screenshots need a real `DISPLAY`, and must run in the **foreground** — backgrounded GUI runs die with exit 144. Park the window with `--position -6000,-6000` plus `WINDOW_FLAG_NO_FOCUS`; it still renders and captures fine from off-screen, and stops stealing the desktop. (`xvfb-run` would be cleaner but Xvfb is not installed.)
 - **Don't hand-roll geometry the renderer already does.** Links were first drawn as camera-facing quads in an `ImmediateMesh` and read as flat paper, because that is what they were. `MultiMeshInstance3D` with a `CylinderMesh` shaft, a zero-top-radius `CylinderMesh` cone and a `SphereMesh` dot gives real 3D that foreshortens and occludes properly — and needs no per-frame rebuild when the camera orbits.
 - **`anim = false`** makes every hop instant so `test_play.gd` can run whole games without waiting on real-time tweens.
+
+### The dice tray
+
+`src/dice/tray.gd`, on `CamRig/Camera3D/Tray`, so it holds the bottom-left corner of the frame through any orbit or zoom and keeps a constant size on screen (fixed `DEPTH` in front of the camera; `_layout()` recomputes the corner from the camera's own frustum on every resize).
+
+**It exists because none of this survived being text.** The kit was a line in the HUD, so nobody knew there were two dice; the reroll was an invisible counter spent with a key nobody would guess. On the tray the kit *is* two dice — the picked one bright and forward, the other dim and back — and a reroll *is* a spare die sitting beside them. Click a die to pick it up, click a spare to spend it. One spare is authored in the scene and the rest are copies of it.
+
+Hit-testing is `unproject_position` and a pixel radius, not collision shapes: two boxes do not need a physics subsystem to answer where they are on screen. A left click only counts as a click if it moved less than 6 px, because the same button orbits the camera.
+
+**The roll lands on the die, not on the player.** The number used to pop over the player's head with a descending noise burst, which reads as the board hitting *them* rather than a move they chose. Now the picked die tumbles and comes up on the number, and the sound rises instead of falling.
 
 ### Sound and effects
 

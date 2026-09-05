@@ -30,18 +30,18 @@ func refresh(s: Dictionary) -> void:
 
 func _status(s: Dictionary) -> void:
 	if s["won"]:
-		status.text = "WIN in %d turns  -  R restart" % s["turns"]
+		status.text = "WIN in %d turns  -  SHIFT+R restart" % s["turns"]
 		return
 	var here := "(%s)" % ", ".join(Array(s["coords"]).map(func(v): return str(v)))
-	var tail := "" if s["rerolls"] == 0 else "  -  X reroll x%d" % s["rerolls"]
+	# The die, the roll and the spares are all objects on the tray now, so the line
+	# says only what the tray cannot: where you are, and what the board wants next.
 	if s["roll"] == 0:
-		status.text = "%s  -  turn %d  -  SPACE roll d%d%s  -  ESC help" \
-				% [here, s["turns"], s["faces"], tail]
+		status.text = "%s  -  turn %d  -  SPACE to roll  -  ESC help" % [here, s["turns"]]
 		return
 	if s["moves"].is_empty():
-		status.text = "%s  -  rolled %d, nothing legal%s" % [here, s["roll"], tail]
+		status.text = "%s  -  nothing legal from here" % here
 		return
-	status.text = "%s  -  rolled %d, pick a marker%s" % [here, s["roll"], tail]
+	status.text = "%s  -  pick a marker" % here
 
 
 func _moves(s: Dictionary) -> String:

@@ -26,7 +26,10 @@ var muted := false
 func _ready() -> void:
 	# Fast attack, hard decay: a flat-vector board should not have soft edges.
 	bank = {
-		"roll": _noise(0.13, 0.5),
+		# Rising, not a noise burst falling away: a roll is the player acting, and a
+		# descending crunch made it sound like the board hitting them back.
+		"roll": _tone(300.0, 900.0, 0.15, "square", 0.008),
+		"pick": _tone(520.0, 620.0, 0.05, "square"),
 		"hop": _tone(660.0, 990.0, 0.09, "square"),
 		"ladder": _tone(440.0, 1320.0, 0.28, "saw", 0.004),
 		"snake": _tone(700.0, 150.0, 0.38, "saw", 0.006),
@@ -79,22 +82,6 @@ func _tone(f0: float, f1: float, secs: float, wave := "saw", detune := 0.0) -> A
 		if detune > 0.0:
 			s = (s + _wave(phase2, wave)) * 0.5
 		data.encode_s16(i * 2, int(clampf(s * _env(u), -1.0, 1.0) * 32767.0))
-	return _wav(data)
-
-
-## Filtered-ish noise for the die. A pitch sweep says "a thing moved"; a burst says
-## "something was shaken", which is what a roll is.
-func _noise(secs: float, tone: float) -> AudioStreamWAV:
-	var n := int(RATE * secs)
-	var data := PackedByteArray()
-	data.resize(n * 2)
-	var last := 0.0
-	for i in n:
-		var u := float(i) / float(n)
-		# One-pole lowpass on white noise: cheaper than a filter node and this is a
-		# 3000-sample buffer, not a signal chain.
-		last = lerpf(last, randf() * 2.0 - 1.0, tone)
-		data.encode_s16(i * 2, int(clampf(last * _env(u), -1.0, 1.0) * 32767.0))
 	return _wav(data)
 
 

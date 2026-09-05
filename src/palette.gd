@@ -26,8 +26,12 @@ const C_HERE := Color(0.78, 0.46, 0.13)
 const C_LADDER := Color(0.49, 1.0, 0.31)
 const C_SNAKE := Color(1.0, 0.24, 0.60)
 const C_GOAL := Color(1.0, 0.89, 0.25)
-## A move that lands on plain floor. Matches the marker color authored in ghost.tscn.
+## A move that lands on plain floor. Matches the marker color authored in ghost.tscn,
+## and the dice on the tray: the same cyan says "this is yours to act with".
 const C_MOVE := Color(0.35, 0.92, 1.0)
+## Ink on a die's face. Near-black, because the face it sits on is at full brightness
+## and a bright number on a bright die is not a number at all.
+const C_DIE_INK := Color(0.03, 0.07, 0.10)
 
 ## Debug gizmo, one per lattice axis in AXIS_NAMES order: X Y Z W V U.
 const C_AXIS := [

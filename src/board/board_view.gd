@@ -141,30 +141,6 @@ func win_burst() -> void:
 	_flash(Board.goal_coords(size), Pal.C_GOAL, "star", 0.9)
 
 
-## The rolled number, at the player, rising and fading. The HUD says it too, but the
-## HUD is not where you are looking when you are looking at the board.
-func roll_pop(n: int, c: PackedInt32Array) -> void:
-	if not fx:
-		return
-	var l := Label3D.new()
-	l.text = str(n)
-	l.font = LABEL_FONT
-	l.font_size = 64
-	l.pixel_size = 0.007
-	l.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	l.no_depth_test = true
-	l.modulate = Pal.C_HERE
-	# Its own child, not one of DebugLabels': those are cleared on every redraw.
-	l.position = world(c) + Vector3(0.0, 0.5, 0.0)
-	add_child(l)
-	var t := create_tween()
-	t.set_parallel()
-	t.tween_property(l, "position", l.position + Vector3(0.0, 0.9, 0.0), 0.7) \
-		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-	t.tween_property(l, "modulate:a", 0.0, 0.7).set_delay(0.2)
-	t.chain().tween_callback(l.queue_free)
-
-
 ## An effect is a cell, a color and a 0..1 clock. It is drawn with the board rather
 ## than as its own node, so it sits in the layout and follows the spread tween like
 ## everything else does.

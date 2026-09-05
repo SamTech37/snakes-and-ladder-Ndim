@@ -25,6 +25,7 @@ enum View { SPREAD, FOCUS }
 @onready var ghosts: Node3D = $Ghosts
 @onready var player: MeshInstance3D = $Player
 @onready var hud: CanvasLayer = $HUD
+@onready var tray: Node3D = $CamRig/Camera3D/Tray
 
 var coords := PackedInt32Array()
 var links := {}
@@ -51,6 +52,10 @@ var rerolls := 0
 var dragging := false
 var panning := false
 
+## Where the left button went down, so a click can be told from a drag: the same
+## button orbits the camera and picks up a die.
+var press_at := Vector2.ZERO
+
 
 func _ready() -> void:
 	# Everything each part needs from another is wired here, once, rather than left to
@@ -60,6 +65,7 @@ func _ready() -> void:
 	rig.hud = hud
 	ghosts.board = view3d
 	view3d.fx = anim
+	tray.anim = anim
 
 	# SNL_SEED pins the board so two runs render the same thing — without it a
 	# screenshot can't be compared against the one before it.
@@ -87,6 +93,7 @@ func new_game() -> void:
 	ghosts.clear()
 	_redraw()
 	rig.fit()
+	_refresh_tray()
 	_refresh_hud()
 
 
@@ -103,6 +110,13 @@ func _refresh_hud() -> void:
 		"rerolls": rerolls,
 		"mode": "SPREAD" if view == View.SPREAD else "FOCUS",
 	})
+
+
+## The tray is the kit and the rerolls, as objects. Everything the HUD used to spell
+## out in words is one of these.
+func _refresh_tray() -> void:
+	tray.set_kit(Rules.kit(size), die_index)
+	tray.set_spares(rerolls)
 
 
 ## Faces on the die currently selected.
@@ -190,10 +204,16 @@ func _roll(spend_turn: bool) -> void:
 		turns += 1
 	moves = Board.legal_moves(coords, size, roll)
 	Audio.play("roll")
-	view3d.roll_pop(roll, coords)
-	if Rules.grants_reroll(moves, coords, size):
+	# The number comes up on the die that was thrown. It used to pop over the player,
+	# which reads as something landing *on* them rather than a move they just made.
+	tray.roll_to(roll)
+	var trapped := Rules.grants_reroll(moves, coords, size)
+	if trapped:
 		rerolls += 1
 		Audio.play("token")
+	_refresh_tray()
+	if trapped:
+		tray.flash_spares()
 	ghosts.show_moves(moves, links)
 	_redraw()
 	_refresh_hud()
@@ -205,7 +225,24 @@ func _pick_die(i: int) -> void:
 	if won or i >= Rules.kit(size).size():
 		return
 	die_index = i
+	Audio.play("pick")
+	_refresh_tray()
 	_refresh_hud()
+
+
+## A click that did not drag. The tray is the only thing worth clicking: a die picks
+## it up, a spare spends it. Board cells stay on the number keys, which is what keeps
+## working when 5D offers ten directions.
+func _click(pos: Vector2) -> void:
+	if busy or won:
+		return
+	var i: int = tray.die_at(pos)
+	if i >= 0:
+		if moves.is_empty():
+			_pick_die(i)
+		return
+	if tray.spare_at(pos):
+		reroll()
 
 
 func choose(i: int) -> void:
@@ -277,6 +314,10 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton:
 		if event.button_index == MOUSE_BUTTON_LEFT:
 			dragging = event.pressed
+			if event.pressed:
+				press_at = event.position
+			elif event.position.distance_to(press_at) < 6.0:
+				_click(event.position)
 		elif event.button_index == MOUSE_BUTTON_RIGHT:
 			panning = event.pressed
 		elif event.button_index == MOUSE_BUTTON_WHEEL_UP and event.pressed:
@@ -290,7 +331,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event is InputEventKey and event.pressed and not event.echo:
 		# ponytail: R, TAB and the number keys read raw keycodes rather than adding
 		# input actions to project.godot. "roll" reuses the built-in ui_accept.
-		if event.keycode == KEY_R:
+		# Shift, because a bare R sits next to every key you actually use and wipes the
+		# game you were playing.
+		if event.keycode == KEY_R and event.shift_pressed:
 			new_game()
 		elif event.keycode == KEY_ESCAPE:
 			hud.toggle_help()

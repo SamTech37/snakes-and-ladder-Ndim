@@ -1,4 +1,4 @@
-[gd_scene load_steps=20 format=3]
+[gd_scene load_steps=23 format=3]
 
 [ext_resource type="Script" path="res://src/main/main.gd" id="1_main"]
 [ext_resource type="PackedScene" path="res://src/ghost/ghost.tscn" id="2_ghost"]
@@ -6,6 +6,7 @@
 [ext_resource type="Script" path="res://src/board/board_view.gd" id="4_board"]
 [ext_resource type="Script" path="res://src/ghost/ghosts.gd" id="5_ghosts"]
 [ext_resource type="Script" path="res://src/hud/hud.gd" id="6_hud"]
+[ext_resource type="Script" path="res://src/dice/tray.gd" id="7_tray"]
 
 [sub_resource type="Environment" id="Env_neon"]
 background_mode = 1
@@ -68,6 +69,12 @@ height = 0.52
 radial_segments = 12
 rings = 6
 
+[sub_resource type="BoxMesh" id="Mesh_die"]
+size = Vector3(0.17, 0.17, 0.17)
+
+[sub_resource type="BoxMesh" id="Mesh_spare"]
+size = Vector3(0.09, 0.09, 0.09)
+
 [sub_resource type="SystemFont" id="Font_mono"]
 font_names = PackedStringArray("JetBrains Mono", "DejaVu Sans Mono", "Liberation Mono", "monospace")
 subpixel_positioning = 0
@@ -90,6 +97,39 @@ script = ExtResource("3_rig")
 
 [node name="Camera3D" type="Camera3D" parent="CamRig"]
 fov = 50.0
+
+[node name="Tray" type="Node3D" parent="CamRig/Camera3D"]
+script = ExtResource("7_tray")
+
+[node name="Die0" type="MeshInstance3D" parent="CamRig/Camera3D/Tray"]
+mesh = SubResource("Mesh_die")
+
+[node name="Face" type="Label3D" parent="CamRig/Camera3D/Tray/Die0"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.11)
+pixel_size = 0.00085
+billboard = 1
+no_depth_test = true
+font = SubResource("Font_mono")
+font_size = 96
+text = "d6"
+
+[node name="Die1" type="MeshInstance3D" parent="CamRig/Camera3D/Tray"]
+mesh = SubResource("Mesh_die")
+
+[node name="Face" type="Label3D" parent="CamRig/Camera3D/Tray/Die1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.11)
+pixel_size = 0.00085
+billboard = 1
+no_depth_test = true
+font = SubResource("Font_mono")
+font_size = 96
+text = "d3"
+
+[node name="Spares" type="Node3D" parent="CamRig/Camera3D/Tray"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.62, 0, 0)
+
+[node name="Spare" type="MeshInstance3D" parent="CamRig/Camera3D/Tray/Spares"]
+mesh = SubResource("Mesh_spare")
 
 [node name="Board" type="Node3D" parent="."]
 script = ExtResource("4_board")
@@ -168,7 +208,8 @@ theme_override_fonts/font = SubResource("Font_mono")
 theme_override_styles/normal = SubResource("Box_hud")
 theme_override_font_sizes/font_size = 16
 text = "marker   cube plain   cone up LADDER   cone down SNAKE   diamond GOAL
-         a link's marker draws a line to where it drags you"
+         a link's marker draws a line to where it drags you
+tray     the bright die is the one you roll; the small ones are rerolls"
 
 [node name="Controls" type="Label" parent="HUD/Margin/Rows/Help"]
 layout_mode = 2
@@ -176,7 +217,8 @@ theme_override_colors/font_color = Color(0.62, 0.66, 0.85, 1)
 theme_override_fonts/font = SubResource("Font_mono")
 theme_override_styles/normal = SubResource("Box_hud")
 theme_override_font_sizes/font_size = 16
-text = "SPACE  roll          number keys  pick a move, or pick the die between turns
-X      reroll        TAB  view        D  dimensions      C  recentre
-F3     debug         R    restart     ESC  close this
-drag orbit           right-drag pan   wheel zoom"
+text = "SPACE     roll the die you picked      click a die   pick it up
+number    pick a move                   click a spare  spend it
+TAB view    D dimensions   C recentre   M mute   F3 debug
+SHIFT+R restart            ESC close this
+drag orbit    right-drag pan    wheel zoom"
