@@ -1,7 +1,11 @@
-[gd_scene load_steps=16 format=3]
+[gd_scene load_steps=20 format=3]
 
 [ext_resource type="Script" path="res://src/main/main.gd" id="1_main"]
 [ext_resource type="PackedScene" path="res://src/ghost/ghost.tscn" id="2_ghost"]
+[ext_resource type="Script" path="res://src/camera/cam_rig.gd" id="3_rig"]
+[ext_resource type="Script" path="res://src/board/board_view.gd" id="4_board"]
+[ext_resource type="Script" path="res://src/ghost/ghosts.gd" id="5_ghosts"]
+[ext_resource type="Script" path="res://src/hud/hud.gd" id="6_hud"]
 
 [sub_resource type="Environment" id="Env_neon"]
 background_mode = 1
@@ -77,37 +81,43 @@ content_margin_bottom = 4.0
 
 [node name="Main" type="Node3D"]
 script = ExtResource("1_main")
-ghost_scene = ExtResource("2_ghost")
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
 environment = SubResource("Env_neon")
 
 [node name="CamRig" type="Node3D" parent="."]
+script = ExtResource("3_rig")
 
 [node name="Camera3D" type="Camera3D" parent="CamRig"]
 fov = 50.0
 
-[node name="Grid" type="MeshInstance3D" parent="."]
+[node name="Board" type="Node3D" parent="."]
+script = ExtResource("4_board")
+
+[node name="Grid" type="MeshInstance3D" parent="Board"]
 material_override = SubResource("Mat_lines")
 mesh = SubResource("Mesh_grid")
 
-[node name="Shafts" type="MultiMeshInstance3D" parent="."]
+[node name="Shafts" type="MultiMeshInstance3D" parent="Board"]
 multimesh = SubResource("MM_shaft")
 
-[node name="Heads" type="MultiMeshInstance3D" parent="."]
+[node name="Heads" type="MultiMeshInstance3D" parent="Board"]
 multimesh = SubResource("MM_head")
 
-[node name="Dots" type="MultiMeshInstance3D" parent="."]
+[node name="Dots" type="MultiMeshInstance3D" parent="Board"]
 multimesh = SubResource("MM_dot")
 
-[node name="Ghosts" type="Node3D" parent="."]
+[node name="DebugLabels" type="Node3D" parent="Board"]
 
-[node name="DebugLabels" type="Node3D" parent="."]
+[node name="Ghosts" type="Node3D" parent="."]
+script = ExtResource("5_ghosts")
+ghost_scene = ExtResource("2_ghost")
 
 [node name="Player" type="MeshInstance3D" parent="."]
 mesh = SubResource("Mesh_player")
 
 [node name="HUD" type="CanvasLayer" parent="."]
+script = ExtResource("6_hud")
 
 [node name="Margin" type="MarginContainer" parent="HUD"]
 anchors_preset = 15

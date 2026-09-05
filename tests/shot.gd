@@ -27,23 +27,23 @@ func _initialize() -> void:
 	# no markers at all and printed three null-access errors.
 	await process_frame
 
-	m.debug = args.has("debug")
+	m.view3d.debug = args.has("debug")
 	if args.size() > 3 and args[3] == "roll":
 		m.do_roll()
 	# Straight to the end state of the view rather than waiting on the tween.
 	m.snap_view(m.View.SPREAD if args.size() > 2 and args[2].to_float() > 0.5 else m.View.FOCUS)
 	if args.size() > 4:
 		var ang := args[4].split(",")
-		m.yaw = ang[0].to_float()
-		m.pitch = ang[1].to_float()
-		m._set_spread(m.spread)
+		m.rig.yaw = ang[0].to_float()
+		m.rig.pitch = ang[1].to_float()
+		m.set_spread(m.view3d.spread)
 
 	for i in 10:
 		await process_frame
 	await RenderingServer.frame_post_draw
 	root.get_texture().get_image().save_png(out)
 	print("wrote %s  %s  %s  yaw=%.2f pitch=%.2f" % [
-			out, str(m.size), "SPREAD" if m.view == m.View.SPREAD else "FOCUS", m.yaw, m.pitch])
+			out, str(m.size), "SPREAD" if m.view == m.View.SPREAD else "FOCUS", m.rig.yaw, m.rig.pitch])
 	quit()
 
 

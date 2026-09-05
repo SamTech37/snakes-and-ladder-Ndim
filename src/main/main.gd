@@ -1,38 +1,16 @@
 extends Node3D
 
 ## N-dimensional Snakes & Ladders. Roll gives distance, you pick the axis.
-## Nodes, materials and the environment live in main.tscn beside this file; the
-## script only does what cannot be authored by hand — the board mesh (its geometry
-## depends on `size`), the turn loop, and input.
+##
+## This is the turn loop and the input map, and nothing else. The board's geometry is
+## `Board/board_view.gd`, the camera is `CamRig/cam_rig.gd`, the markers are
+## `Ghosts/ghosts.gd`, the text is `HUD/hud.gd`, and the rules that can be measured
+## without a scene are `src/game/rules.gd`. Nodes and materials live in main.tscn.
 
 const Board = preload("res://src/board/board.gd")
-## Every color comes from here. Don't write a Color() literal in this file.
-const Pal = preload("res://src/palette.gd")
-const AXIS_NAMES := "XYZWVU"
-const LABEL_FONT = preload("res://src/main/mono.tres")
-
-## What a plane that is neither yours nor a destination drops to. Dimmed, not hidden:
-## the stack has to stay visible or FOCUS stops being a view of the board.
-const DIM := 0.22
-
-## Length of the cone at the destination end of a link.
-const HEAD_LEN := 0.7
+const Rules = preload("res://src/game/rules.gd")
 
 enum View { SPREAD, FOCUS }
-
-## Each view has a camera angle as well as a layout, and the angle is half of what
-## makes them different views rather than one view at two spacings. FOCUS looks at
-## the deck from an isometric corner so the planes read as stacked cards; SPREAD
-## looks at the board dead-on so the planes come out as flat squares in a row.
-## Orbit is untouched afterwards -- switching view just parks the camera somewhere
-## sensible for that view.
-## FOCUS looks at the cube nearly square-on with just enough turn to see that the
-## slices are separated in depth. 45 degrees of yaw and 35 of pitch -- a true
-## isometric corner -- was in here for no reason I ever justified, and it renders
-## every plane as a leaning parallelogram: seen from a corner, a cube has no square
-## face pointing at you.
-const A_ISO := Vector2(0.30, -0.16)
-const A_FLAT := Vector2(0.0, 0.0)
 
 ## Boards D cycles through, so the higher-dimensional ones are reachable from inside
 ## the game rather than only by editing the export or a test script.
@@ -53,19 +31,12 @@ static var SIZES: Array[PackedInt32Array] = [
 @export var link_span := 5
 ## Off makes every hop instant, so test_play.gd can run games without waiting on tweens.
 @export var anim := true
-@export var ghost_scene: PackedScene
 
 @onready var rig: Node3D = $CamRig
-@onready var cam: Camera3D = $CamRig/Camera3D
-@onready var grid: MeshInstance3D = $Grid
-@onready var shafts: MultiMeshInstance3D = $Shafts
-@onready var heads: MultiMeshInstance3D = $Heads
-@onready var dots: MultiMeshInstance3D = $Dots
+@onready var view3d: Node3D = $Board
 @onready var ghosts: Node3D = $Ghosts
-@onready var labels: Node3D = $DebugLabels
 @onready var player: MeshInstance3D = $Player
-@onready var status: Label = $HUD/Margin/Rows/Status
-@onready var menu: Label = $HUD/Margin/Rows/Moves
+@onready var hud: CanvasLayer = $HUD
 
 var coords := PackedInt32Array()
 var links := {}
@@ -77,39 +48,22 @@ var won := false
 var view := View.FOCUS
 var rng := RandomNumberGenerator.new()
 
-## 0 = planes stacked like a deck, 1 = pulled apart into one row. Tweened by TAB, so
-## the stack visibly explodes instead of cutting between two layouts.
-var spread := 0.0
-
-## Orbit stays free: every fixed view is a subset of it, and without it there is no
-## way to judge which angles are worth fixing on.
-var yaw := A_ISO.x
-var pitch := A_ISO.y
-
 ## Where the camera was left in FOCUS, so TAB-ing back returns to the angle you were
 ## using rather than snapping to the default. SPREAD is deliberately not remembered.
 var parked := {}
 
-## F3: axis gizmo plus a numeric camera readout.
-var debug := false
-var zoom := 20.0
-## Half the board's depth along the view axis, so the camera can be pulled back clear
-## of the nearest plane rather than starting inside the stack.
-var half_depth := 0.0
 var dragging := false
-
-## Right-drag offset, in the camera's own screen plane and in world units. The fit
-## frames the whole board, so on a big lattice zoomed in there is no way to reach the
-## corner you are playing in without it. Added on top of the fitted pivot rather than
-## replacing it, so it survives a refit; C clears it.
 var panning := false
-var pan := Vector2.ZERO
-
-## Marker materials by color, built on demand. See _ghost_mat().
-var ghost_mats := {}
 
 
 func _ready() -> void:
+	# Everything each part needs from another is wired here, once, rather than left to
+	# scripts reaching up through the tree for their neighbours.
+	view3d.rig = rig
+	rig.board = view3d
+	rig.hud = hud
+	ghosts.board = view3d
+
 	# SNL_SEED pins the board so two runs render the same thing — without it a
 	# screenshot can't be compared against the one before it.
 	var s := OS.get_environment("SNL_SEED")
@@ -128,306 +82,41 @@ func new_game() -> void:
 	moves = []
 	won = false
 	busy = false
-	pan = Vector2.ZERO
-	player.position = _world(coords)
-	_draw_board()
-	_frame_camera()
-	_clear_ghosts()
+	rig.pan = Vector2.ZERO
+	view3d.size = size
+	player.position = view3d.world(coords)
+	ghosts.clear()
+	_redraw()
+	rig.fit()
 	_refresh_hud()
 
 
-func _world(c: PackedInt32Array) -> Vector3:
-	return Board.coords_to_world(c, size, spread)
+## Board and markers follow the game state; called whenever either changes.
+func _redraw() -> void:
+	view3d.sync(coords, links, moves)
 
 
-## Planes the player can see into: the one being stood on, plus wherever this turn's
-## legal moves land. Everything else draws at DIM.
-func _lit_planes() -> Dictionary:
-	var lit := {Board.plane_of(coords, size): true}
-	for m in moves:
-		lit[Board.plane_of(m["coords"], size)] = true
-	return lit
+func _refresh_hud() -> void:
+	hud.refresh({
+		"coords": coords, "size": size, "links": links, "moves": moves,
+		"roll": roll, "turns": turns, "won": won,
+		"faces": Rules.die_faces(6, size),
+		"mode": "SPREAD" if view == View.SPREAD else "FOCUS",
+	})
 
 
-## Fills the Grid node's ImmediateMesh: one grid per plane, every plane's frame, and
-## every link. Colors come from vertex color; the material is on the node, set in
-## the scene. In FOCUS the planes you are not on are dimmed rather than dropped --
-## the stack has to stay there or it stops being a view of the board.
-func _draw_board() -> void:
-	var im: ImmediateMesh = grid.mesh
-	im.clear_surfaces()
-	im.surface_begin(Mesh.PRIMITIVE_LINES)
-
-	var span := maxi(1, Board.dist_to_goal(Board.index_to_coords(0, size), size))
-	var here := Board.plane_of(coords, size)
-	var lit := _lit_planes()
-
-	for i in Board.total_cells(size):
-		var c := Board.index_to_coords(i, size)
-		var f := _fade(Board.plane_of(c, size), lit)
-		# Only axes 0 and 1 run inside a plane; a step along any higher axis leaves
-		# for another plane and is not drawn as an edge.
-		for k in mini(2, size.size()):
-			if c[k] + 1 >= size[k]:
-				continue
-			var d := c.duplicate()
-			d[k] += 1
-			_seg(im, _world(c), _shell_color(c, span) * f, _world(d), _shell_color(d, span) * f)
-
-	for p in Board.plane_count(size):
-		_plane_frame(im, p, (Pal.C_HERE if p == here else Pal.C_FRAME) * _fade(p, lit))
-
-	_star(im, _world(Board.goal_coords(size)), 0.45, Pal.C_GOAL)
-	if debug:
-		_draw_axes(im)
-	else:
-		_clear_labels()
-	im.surface_end()
-	_draw_links(lit)
+func die_faces() -> int:
+	return Rules.die_faces(6, size)
 
 
-## One labelled arrow per lattice axis, from the start cell along the direction a +1
-## step on that axis actually moves, plus labelled rings for yaw, pitch and roll.
-## Directions are taken from the projection rather than assumed, so they stay correct
-## for W and V and all the way through the spread tween.
-func _draw_axes(im: ImmediateMesh) -> void:
-	_clear_labels()
-	var base := Board.index_to_coords(0, size)
-	var origin := _world(base)
-	for k in size.size():
-		if size[k] < 2:
-			continue
-		var one := base.duplicate()
-		one[k] = 1
-		var step := _world(one) - origin
-		if step.length() < 0.001:
-			continue
-		var dir := step.normalized()
-		var color: Color = Pal.C_AXIS[k % Pal.C_AXIS.size()]
-		var tip := origin + dir * 3.5
-		_line(im, origin, tip, color)
-		# Barbs, so the arrow still reads when the axis points at the camera.
-		var side := _perp(dir) * 0.25
-		_line(im, tip, tip - dir * 0.6 + side, color)
-		_line(im, tip, tip - dir * 0.6 - side, color)
-		# A tick per cell, so the axis is countable as well as directional.
-		for i in range(1, mini(size[k], 7)):
-			var at := origin + step * float(i)
-			_line(im, at - side * 0.6, at + side * 0.6, color)
-		_label(AXIS_NAMES[k] if k < AXIS_NAMES.length() else str(k), tip + dir * 0.6, color)
-
-	# Which way the camera turns. A compact widget sharing the axis arrows' origin, so
-	# orientation is something you look at rather than read. Sized off the board, not
-	# the zoom: rings scaled to the viewport swallowed everything behind them.
-	var b := cam.global_transform.basis
-	_ring(im, origin, Vector3.RIGHT, Vector3.BACK, 2.6, Pal.C_YAW, "YAW", 0.0)
-	_ring(im, origin, b.y, -b.z, 2.2, Pal.C_PITCH, "PITCH", -0.9)
-	_ring(im, origin, b.x, b.y, 1.8, Pal.C_ROLL, "ROLL", 0.9)
-
-
-## Circle spanned by `u` and `v`, labelled at the point furthest to screen-right and
-## lifted by `lift` so the three rings do not stack their labels on one another.
-func _ring(im: ImmediateMesh, centre: Vector3, u: Vector3, v: Vector3, r: float,
-		color: Color, name: String, lift: float) -> void:
-	var un := u.normalized()
-	var vn := v.normalized()
-	var prev := centre + un * r
-	var best := prev
-	var best_x := -INF
-	for i in range(1, 49):
-		var a := TAU * float(i) / 48.0
-		var p := centre + (un * cos(a) + vn * sin(a)) * r
-		_line(im, prev, p, color)
-		prev = p
-		var x := cam.global_transform.basis.x.dot(p)
-		if x > best_x:
-			best_x = x
-			best = p
-	_label(name, best + cam.global_transform.basis.y * lift, color)
-
-
-func _label(text: String, at: Vector3, color: Color) -> void:
-	var l := Label3D.new()
-	l.text = text
-	l.font = LABEL_FONT
-	l.font_size = 64
-	l.pixel_size = 0.006
-	l.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	l.no_depth_test = true
-	l.modulate = color
-	l.position = at
-	labels.add_child(l)
-
-
-func _clear_labels() -> void:
-	for l in labels.get_children():
-		labels.remove_child(l)
-		l.free()
-
-
-## Links are real geometry, not lines and not billboards: a shaft cylinder, a cone
-## landing on the destination cell, and a sphere at each end, instanced through
-## MultiMesh. Camera-facing quads were tried first and read as flat paper because
-## that is exactly what they were -- these pierce the stack and foreshorten properly
-## because the renderer is doing it rather than the script.
-func _draw_links(lit: Dictionary) -> void:
-	var n := links.size()
-	for mm in [shafts.multimesh, heads.multimesh, dots.multimesh]:
-		mm.instance_count = 0
-	shafts.multimesh.instance_count = n
-	heads.multimesh.instance_count = n
-	dots.multimesh.instance_count = n * 2
-
-	var i := 0
-	for a in links:
-		var ca := Board.index_to_coords(a, size)
-		var cb := Board.index_to_coords(links[a], size)
-		var up := Board.dist_to_goal(cb, size) < Board.dist_to_goal(ca, size)
-		var f := maxf(_fade(Board.plane_of(ca, size), lit), _fade(Board.plane_of(cb, size), lit))
-		var color := (Pal.C_LADDER if up else Pal.C_SNAKE) * f
-		var wa := _world(ca)
-		var wb := _world(cb)
-		var head := minf(HEAD_LEN, wa.distance_to(wb) * 0.5)
-		var neck := wb - (wb - wa).normalized() * head
-
-		shafts.multimesh.set_instance_transform(i, _span(wa, neck))
-		shafts.multimesh.set_instance_color(i, color)
-		heads.multimesh.set_instance_transform(i, _span(neck, wb))
-		heads.multimesh.set_instance_color(i, color)
-		for e in 2:
-			dots.multimesh.set_instance_transform(i * 2 + e, Transform3D(Basis(), wb if e else wa))
-			dots.multimesh.set_instance_color(i * 2 + e, color)
-		i += 1
-
-
-## Places a unit-height mesh that runs along its own +Y so it spans `from` to `to`.
-func _span(from: Vector3, to: Vector3) -> Transform3D:
-	var d := to - from
-	var len := d.length()
-	if len < 0.0001:
-		return Transform3D(Basis().scaled(Vector3.ZERO), from)
-	var y := d / len
-	var x := y.cross(Vector3.UP)
-	if x.length_squared() < 0.0001:
-		x = y.cross(Vector3.RIGHT)
-	x = x.normalized()
-	return Transform3D(Basis(x, y * len, x.cross(y)), (from + to) * 0.5)
-
-
-## Full brightness on a lit plane, DIM elsewhere. SPREAD lights everything: once the
-## planes are pulled apart nothing is hidden behind anything, so nothing needs dimming.
-func _fade(p: int, lit: Dictionary) -> float:
-	if view == View.SPREAD or lit.has(p):
-		return 1.0
-	return DIM
-
-
-## Violet at the start corner, teal at the goal: the gradient doubles as the progress bar.
-func _shell_color(c: PackedInt32Array, span: int) -> Color:
-	return Pal.C_SHELL_START.lerp(Pal.C_SHELL_GOAL, 1.0 - float(Board.dist_to_goal(c, size)) / span)
-
-
-## Outline around one plane, drawn through the projection so it tilts and slides with
-## the plane it belongs to. The player's own is warm -- that is what says which plane
-## you are standing on when the stack is packed.
-func _plane_frame(im: ImmediateMesh, p: int, color: Color) -> void:
-	var w := (size[0] - 1) if size.size() > 0 else 0
-	var h := (size[1] - 1) if size.size() > 1 else 0
-	# The first cell of plane p, since index = c0 + c1*size0 + p*size0*size1.
-	var seed_cell := Board.index_to_coords(p * size[0] * (size[1] if size.size() > 1 else 1), size)
-	var corners: Array[Vector3] = []
-	for xy in [Vector2i(0, 0), Vector2i(w, 0), Vector2i(w, h), Vector2i(0, h)]:
-		var c := seed_cell.duplicate()
-		c[0] = xy.x
-		if c.size() > 1:
-			c[1] = xy.y
-		corners.append(_world(c))
-	# Push each corner out along the plane's own diagonal so the frame clears the grid.
-	var mid := (corners[0] + corners[2]) * 0.5
-	for i in 4:
-		corners[i] += (corners[i] - mid).normalized() * 0.8
-	for i in 4:
-		_line(im, corners[i], corners[(i + 1) % 4], color)
-
-
-func _seg(im: ImmediateMesh, a: Vector3, ca: Color, b: Vector3, cb: Color) -> void:
-	im.surface_set_color(ca)
-	im.surface_add_vertex(a)
-	im.surface_set_color(cb)
-	im.surface_add_vertex(b)
-
-
-func _line(im: ImmediateMesh, a: Vector3, b: Vector3, color: Color) -> void:
-	_seg(im, a, color, b, color)
-
-
-## Perpendicular to `v` across the screen. Taken against the camera's forward vector
-## rather than a fixed axis: the planes are tilted in 3D now, so a chevron built in
-## the xy plane would collapse to nothing at most orbit angles.
-func _perp(v: Vector3) -> Vector3:
-	var fwd := -cam.global_transform.basis.z
-	var p := v.cross(fwd)
-	if p.length_squared() < 0.0001:
-		p = v.cross(Vector3.UP)
-	return p.normalized()
-
-
-
-
-func _star(im: ImmediateMesh, at: Vector3, r: float, color: Color) -> void:
-	for v in [Vector3.RIGHT, Vector3.UP, Vector3(0.7, 0.7, 0.0), Vector3(-0.7, 0.7, 0.0)]:
-		_line(im, at - v * r, at + v * r, color)
-
-
-## Orthographic so the planes keep their parallel edges instead of foreshortening,
-## and fitted to the screen *below the HUD bar* rather than to the whole viewport --
-## fitting the full rect is what let the text sit on top of the board.
-func _frame_camera() -> void:
-	rig.rotation = Vector3(pitch, yaw, 0.0)
-	var basis := rig.global_transform.basis
-	var inv := basis.inverse()
-
-	# Bounding box in the camera's own frame, not the average of the cells: averaging
-	# pulls the centre toward wherever the cells happen to be dense and leaves the
-	# board sitting off to one side.
-	var lo := Vector3(INF, INF, INF)
-	var hi := Vector3(-INF, -INF, -INF)
-	for i in Board.total_cells(size):
-		var v := inv * _world(Board.index_to_coords(i, size))
-		lo = lo.min(v)
-		hi = hi.max(v)
-	lo -= Vector3(1.5, 1.5, 0.0)
-	hi += Vector3(1.5, 1.5, 0.0)
-
-	var extent := hi - lo
-	var vp := get_viewport().get_visible_rect().size
-	var bar := _hud_px()
-	zoom = maxf(extent.y / maxf(0.4, (vp.y - bar) / vp.y), extent.x / vp.aspect())
-	# Raising the pivot drops the board down the screen, clear of the HUD bar.
-	var mid := (lo + hi) * 0.5
-	rig.position = basis * Vector3(mid.x + pan.x, mid.y + bar / vp.y * zoom * 0.5 + pan.y, mid.z)
-	half_depth = extent.z * 0.5
-	cam.position = Vector3(0.0, 0.0, _cam_dist())
-
-
-## Perspective, so a stack of planes actually reads as receding. Orthographic gives a
-## deck zero convergence: the offset between planes comes out as skew, not distance,
-## which is what made the packed view look like sheared paper. `zoom` stays the world
-## height being framed; this turns it into the distance that frames it.
-func _cam_dist() -> float:
-	return zoom * 0.5 / tan(deg_to_rad(cam.fov) * 0.5) + half_depth + 1.0
-
-
-## Height the HUD text actually occupies, so the fit can keep the board out from
-## under it rather than guessing a margin.
-##
-## Measures the two labels, not their container: `Rows` sits in a full-screen
-## MarginContainer and is stretched to it, so asking the container gave ~850 px of
-## "bar" on a 900 px window. That drove the fit to frame roughly twice the board and
-## shoved the pivot most of a screen downward -- the board came out small and low in
-## every screenshot, in orthographic just as much as in perspective.
-func _hud_px() -> float:
-	return status.size.y + menu.size.y + 48.0
+## Layout, camera and everything sitting on the board move together, so the deck
+## visibly explodes instead of cutting between two arrangements.
+func set_spread(s: float) -> void:
+	view3d.spread = s
+	player.position = view3d.world(coords)
+	view3d.redraw()
+	rig.fit()
+	ghosts.place()
 
 
 ## Tweens layout and camera together, so the deck visibly flattens out into a row
@@ -439,24 +128,36 @@ func _set_view(v: View) -> void:
 	# always returns to face-on: it is supposed to be the same picture every time, so
 	# restoring a remembered angle there is more disorienting, not less.
 	if view == View.FOCUS:
-		parked[View.FOCUS] = Vector2(yaw, pitch)
+		parked[View.FOCUS] = Vector2(rig.yaw, rig.pitch)
 	view = v
-	var to_angle: Vector2 = parked.get(View.FOCUS, A_ISO) if v == View.FOCUS else A_FLAT
-	# Rebase to the equivalent yaw nearest the target before interpolating. Orbiting
-	# nine times round leaves yaw nine turns from where it started, and a plain lerp
-	# to the stored angle then unwinds every one of them on screen.
-	yaw = to_angle.x + wrapf(yaw - to_angle.x, -PI, PI)
-	pitch = to_angle.y + wrapf(pitch - to_angle.y, -PI, PI)
-	var from_angle := Vector2(yaw, pitch)
-	var from_spread := spread
+	view3d.flat = v == View.SPREAD
+	var to_angle: Vector2 = parked.get(View.FOCUS, rig.A_ISO) if v == View.FOCUS else rig.A_FLAT
+	rig.rebase(to_angle)
+	var from_angle := Vector2(rig.yaw, rig.pitch)
+	var from_spread: float = view3d.spread
 	var to_spread := 1.0 if v == View.SPREAD else 0.0
 	var t := create_tween()
 	t.tween_method(func(u: float):
 			var a := from_angle.lerp(to_angle, u)
-			yaw = a.x
-			pitch = a.y
-			_set_spread(lerpf(from_spread, to_spread, u)), 0.0, 1.0, 0.5) \
+			rig.yaw = a.x
+			rig.pitch = a.y
+			set_spread(lerpf(from_spread, to_spread, u)), 0.0, 1.0, 0.5) \
 		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
+	_refresh_hud()
+
+
+func _view_angle(v: View) -> Vector2:
+	return rig.A_FLAT if v == View.SPREAD else rig.A_ISO
+
+
+## Straight to a view with no tween. Used by the screenshot harness.
+func snap_view(v: View) -> void:
+	view = v
+	view3d.flat = v == View.SPREAD
+	var a := _view_angle(v)
+	rig.yaw = a.x
+	rig.pitch = a.y
+	set_spread(1.0 if v == View.SPREAD else 0.0)
 	_refresh_hud()
 
 
@@ -468,168 +169,12 @@ func _cycle_size() -> void:
 	new_game()
 
 
-## Flies the camera to an angle instead of snapping to it. Nothing that moves the
-## camera should cut: an instant jump costs the player their bearings and reads as a
-## glitch rather than a move.
-func _tween_angle(to: Vector2, secs := 0.45) -> void:
-	# Same shortest-way rebase as the view switch, so a reset after several turns of
-	# orbiting does not unwind all of them on screen.
-	yaw = to.x + wrapf(yaw - to.x, -PI, PI)
-	pitch = to.y + wrapf(pitch - to.y, -PI, PI)
-	var from := Vector2(yaw, pitch)
-	# C recentres, so it undoes the pan as well as the orbit -- and flies it back
-	# rather than snapping the board across the screen.
-	var from_pan := pan
-	var t := create_tween()
-	t.tween_method(func(u: float):
-			var a := from.lerp(to, u)
-			yaw = a.x
-			pitch = a.y
-			pan = from_pan.lerp(Vector2.ZERO, u)
-			_frame_camera()
-			if debug:
-				_draw_board(), 0.0, 1.0, secs) \
-		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
-
-
-func _view_angle(v: View) -> Vector2:
-	return A_FLAT if v == View.SPREAD else A_ISO
-
-
-## Straight to a view with no tween. Used by the screenshot harness.
-func snap_view(v: View) -> void:
-	view = v
-	var a := _view_angle(v)
-	yaw = a.x
-	pitch = a.y
-	_set_spread(1.0 if v == View.SPREAD else 0.0)
-	_refresh_hud()
-
-
-func _set_spread(s: float) -> void:
-	spread = s
-	player.position = _world(coords)
-	_draw_board()
-	_frame_camera()
-	_place_ghosts()
-
-
-func _clear_ghosts() -> void:
-	# free(), not queue_free(): deferred frees only collect at end of frame, so a
-	# caller that takes many turns without yielding piles up every marker ever made.
-	for g in ghosts.get_children():
-		ghosts.remove_child(g)
-		g.free()
-
-
-## One numbered marker per legal move. Numbers, not mouse picking, because
-## numbers keep working when 5D offers ten directions. Each marker is tinted with
-## what it lands on, so the choice can be read off the board instead of only off the
-## HUD list.
-func _show_ghosts() -> void:
-	_clear_ghosts()
-	for i in moves.size():
-		var g := ghost_scene.instantiate()
-		g.get_node("Number").text = str(i + 1)
-		var c := _landing_color(_landing(moves[i]))
-		# The mesh and its material are sub-resources of ghost.tscn and every instance
-		# shares them, so the tint has to be an override rather than a write.
-		g.material_override = _ghost_mat(c)
-		g.get_node("Number").modulate = c
-		ghosts.add_child(g)
-	_place_ghosts()
-
-
-## One material per landing color, made once and shared by every marker using it.
-func _ghost_mat(c: Color) -> StandardMaterial3D:
-	if not ghost_mats.has(c):
-		var m := StandardMaterial3D.new()
-		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		m.albedo_color = c
-		ghost_mats[c] = m
-	return ghost_mats[c]
-
-
-## What a move lands on: "" for plain floor. Both the marker's color and the word in
-## the HUD list come from this, so the two cannot drift apart.
-## ponytail: events and foes are not designed yet -- add their case here, and their
-## color to the palette, when they exist.
-func _landing(m: Dictionary) -> String:
-	var idx := Board.coords_to_index(m["coords"], size)
-	if idx == Board.total_cells(size) - 1:
-		return "GOAL"
-	if not links.has(idx):
-		return ""
-	var to := Board.index_to_coords(links[idx], size)
-	var up := Board.dist_to_goal(to, size) < Board.dist_to_goal(m["coords"], size)
-	return "LADDER" if up else "SNAKE"
-
-
-func _landing_color(kind: String) -> Color:
-	match kind:
-		"GOAL":
-			return Pal.C_GOAL
-		"LADDER":
-			return Pal.C_LADDER
-		"SNAKE":
-			return Pal.C_SNAKE
-	return Pal.C_MOVE
-
-
-## Markers follow the layout while the stack explodes, instead of hanging where the
-## planes used to be.
-func _place_ghosts() -> void:
-	var kids := ghosts.get_children()
-	for i in mini(kids.size(), moves.size()):
-		kids[i].position = _world(moves[i]["coords"])
-
-
-func _move_label(m: Dictionary) -> String:
-	var sign_char := "+" if m["dir"] > 0 else "-"
-	var axis: int = m["axis"]
-	var axis_name := AXIS_NAMES[axis] if axis < AXIS_NAMES.length() else str(axis)
-	var kind := _landing(m)
-	return "%s%s -> (%s)%s" % [sign_char, axis_name,
-			", ".join(Array(m["coords"]).map(func(v): return str(v))),
-			"" if kind.is_empty() else "  " + kind]
-
-
-func _refresh_hud() -> void:
-	if won:
-		status.text = "WIN in %d turns  -  R to restart" % turns
-		menu.text = ""
-		return
-	var here := "(%s)" % ", ".join(Array(coords).map(func(v): return str(v)))
-	var mode := "SPREAD" if view == View.SPREAD else "FOCUS"
-	if roll == 0:
-		status.text = "at %s  -  turn %d  -  SPACE to roll d%d" % [here, turns, die_faces()]
-		menu.text = "%dD board %s  -  %d planes  -  %s view  -  TAB view, D dimensions, C recentre, F3 debug, R restart  -  drag to orbit, right-drag to pan, wheel to zoom" \
-				% [size.size(), str(size), Board.plane_count(size), mode]
-		return
-	status.text = "rolled %d  -  at %s  -  turn %d" % [roll, here, turns]
-	if moves.is_empty():
-		menu.text = "no legal move, turn forfeit  -  SPACE to roll again"
-		return
-	var lines := PackedStringArray()
-	for i in moves.size():
-		lines.append("%d)  %s" % [i + 1, _move_label(moves[i])])
-	menu.text = "\n".join(lines)
-
-
-## d6, except on a board too narrow for it: an axis of extent 5 can only ever be
-## crossed in steps of 1..4, so a 5 or a 6 there would be a guaranteed forfeit.
-func die_faces() -> int:
-	var f := 1
-	for s in size:
-		f = maxi(f, s - 1)
-	return mini(f, 6)
-
-
 func do_roll() -> void:
 	roll = rng.randi_range(1, die_faces())
 	turns += 1
 	moves = Board.legal_moves(coords, size, roll)
-	_show_ghosts()
+	ghosts.show_moves(moves, links)
+	_redraw()
 	_refresh_hud()
 	if moves.is_empty():
 		roll = 0
@@ -641,10 +186,10 @@ func choose(i: int) -> void:
 	var dest: PackedInt32Array = moves[i]["coords"]
 	moves = []
 	roll = 0
-	_clear_ghosts()
+	ghosts.clear()
 	busy = true
 	# Which planes are lit changed the moment the move list emptied.
-	_draw_board()
+	_redraw()
 	await _hop(dest, 0.35, Tween.TRANS_BOUNCE)
 
 	var idx := Board.coords_to_index(coords, size)
@@ -652,7 +197,7 @@ func choose(i: int) -> void:
 		await _slide_link(Board.index_to_coords(links[idx], size))
 
 	# Landing somewhere new changes which plane is lit and which frame is warm.
-	_draw_board()
+	_redraw()
 	won = Board.dist_to_goal(coords, size) == 0
 	busy = false
 	_refresh_hud()
@@ -661,10 +206,10 @@ func choose(i: int) -> void:
 func _hop(dest: PackedInt32Array, secs: float, trans: Tween.TransitionType) -> void:
 	if not anim:
 		coords = dest
-		player.position = _world(dest)
+		player.position = view3d.world(dest)
 		return
 	var t := create_tween()
-	t.tween_property(player, "position", _world(dest), secs) \
+	t.tween_property(player, "position", view3d.world(dest), secs) \
 		.set_trans(trans).set_ease(Tween.EASE_OUT)
 	await t.finished
 	coords = dest
@@ -677,11 +222,11 @@ func _hop(dest: PackedInt32Array, secs: float, trans: Tween.TransitionType) -> v
 func _slide_link(dest: PackedInt32Array) -> void:
 	if not anim:
 		coords = dest
-		player.position = _world(dest)
+		player.position = view3d.world(dest)
 		return
 	var a := player.position
-	var b := _world(dest)
-	var mid := a.lerp(b, 0.5) + _perp(b - a) * (b - a).length() * 0.18
+	var b: Vector3 = view3d.world(dest)
+	var mid: Vector3 = a.lerp(b, 0.5) + rig.perp(b - a) * (b - a).length() * 0.18
 	var t := create_tween()
 	t.tween_interval(0.18)
 	t.tween_method(func(u: float): player.position = _bezier(a, mid, b, u), 0.0, 1.0, 0.9) \
@@ -701,30 +246,13 @@ func _unhandled_input(event: InputEvent) -> void:
 		elif event.button_index == MOUSE_BUTTON_RIGHT:
 			panning = event.pressed
 		elif event.button_index == MOUSE_BUTTON_WHEEL_UP and event.pressed:
-			_set_zoom(zoom * 0.9)
+			rig.set_zoom(rig.zoom * 0.9)
 		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN and event.pressed:
-			_set_zoom(zoom * 1.1)
+			rig.set_zoom(rig.zoom * 1.1)
 	elif event is InputEventMouseMotion and dragging:
-		# Both wrapped, never clamped, so neither drifts to some large multiple of a
-		# turn away from the angles it gets compared against. Pitch used to stop just
-		# short of overhead; past vertical the view is upside down and horizontal drag
-		# reverses, which is what a free orbit on an Euler rig does.
-		yaw = wrapf(yaw - event.relative.x * 0.006, -PI, PI)
-		pitch = wrapf(pitch - event.relative.y * 0.006, -PI, PI)
-		rig.rotation = Vector3(pitch, yaw, 0.0)
-		# The pitch and roll rings are built around the camera, so they have to be
-		# rebuilt as it turns. Only while the gizmo is up.
-		if debug:
-			_draw_board()
+		rig.orbit(event.relative)
 	elif event is InputEventMouseMotion and panning:
-		# The board follows the cursor. Scaled by the framed world height per pixel, so
-		# a drag moves the same distance under the cursor at every zoom. Applied to the
-		# rig directly rather than through _frame_camera(), which refits and would throw
-		# away the wheel zoom on every mouse move.
-		var k := zoom / get_viewport().get_visible_rect().size.y
-		var d := Vector2(-event.relative.x * k, event.relative.y * k)
-		pan += d
-		rig.position += rig.global_transform.basis * Vector3(d.x, d.y, 0.0)
+		rig.pan_by(event.relative)
 	elif event is InputEventKey and event.pressed and not event.echo:
 		# ponytail: R, TAB and the number keys read raw keycodes rather than adding
 		# input actions to project.godot. "roll" reuses the built-in ui_accept.
@@ -737,12 +265,12 @@ func _unhandled_input(event: InputEvent) -> void:
 			# C flies the camera back to where the current view wants it, and forgets
 			# the parked angle so the reset is not undone on the next trip through TAB.
 			parked.erase(view)
-			_tween_angle(_view_angle(view))
+			rig.fly_to(_view_angle(view))
 		elif event.keycode == KEY_D:
 			_cycle_size()
 		elif event.keycode == KEY_F3:
-			debug = not debug
-			_draw_board()
+			view3d.debug = not view3d.debug
+			_redraw()
 			_refresh_hud()
 		elif busy or won:
 			return
@@ -752,8 +280,3 @@ func _unhandled_input(event: InputEvent) -> void:
 			choose(event.keycode - KEY_1)
 		elif event.keycode == KEY_0:
 			choose(9)
-
-
-func _set_zoom(z: float) -> void:
-	zoom = clampf(z, 3.0, 400.0)
-	cam.position = Vector3(0.0, 0.0, _cam_dist())

@@ -66,9 +66,9 @@ func _initialize() -> void:
 		# face-on for the flat row -- and that is the one held to zero.
 		var home: Vector2 = m._view_angle(m.View.SPREAD if s > 0.5 else m.View.FOCUS)
 		for angle in [home, Vector2(0.25, -0.35), Vector2(1.4, -0.2), Vector2(0.79, -1.2)]:
-			m.yaw = angle.x
-			m.pitch = angle.y
-			m._set_spread(s)
+			m.rig.yaw = angle.x
+			m.rig.pitch = angle.y
+			m.set_spread(s)
 			await process_frame
 			var label := "%s %.2f,%.2f" % ["SPREAD" if s > 0.5 else "FOCUS ", angle.x, angle.y]
 			var ambiguous := _report(label, _project(m, s), m)
@@ -81,7 +81,7 @@ func _initialize() -> void:
 
 ## Screen position of every cell that is lit in the current view.
 func _project(m: Node, s: float) -> PackedInt32Array:
-	var lit: Dictionary = m._lit_planes()
+	var lit: Dictionary = m.view3d.lit_planes()
 	var keep := PackedInt32Array()
 	for i in Board.total_cells(size):
 		var c := Board.index_to_coords(i, size)
@@ -97,12 +97,12 @@ func _project(m: Node, s: float) -> PackedInt32Array:
 func _report(label: String, cells: PackedInt32Array, m: Node) -> int:
 	# ponytail: O(n^2), which is 1e6 pairs on the 10^3 board and runs in about a
 	# second. A grid hash would be the fix if a bigger board ever needs measuring.
-	var cam: Camera3D = m.cam
+	var cam: Camera3D = m.rig.cam
 	var n := cells.size()
 	var pts := PackedVector2Array()
 	pts.resize(n)
 	for i in n:
-		pts[i] = cam.unproject_position(m._world(Board.index_to_coords(cells[i], size)))
+		pts[i] = cam.unproject_position(m.view3d.world(Board.index_to_coords(cells[i], size)))
 
 	var nearest := PackedFloat32Array()
 	nearest.resize(n)

@@ -5,6 +5,10 @@ extends RefCounted
 
 ## Pure lattice math. No nodes, no state. Dimension count is data (`size`), not code.
 
+## Axis letters, in lattice order. Here rather than in a view script because they are
+## the lattice's own vocabulary: the HUD and the debug gizmo both name axes with them.
+const AXIS_NAMES := "XYZWVU"
+
 ## Blank space between neighbouring planes once they are pulled apart, in cells.
 const GAP := 2.0
 

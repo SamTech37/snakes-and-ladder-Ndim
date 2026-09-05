@@ -98,11 +98,25 @@ Every test script `extend SceneTree` and asserts. There is no test framework and
 ## Architecture
 
 ```
-src/main/main.tscn + main.gd     scene and its script, together
-src/ghost/ghost.tscn             numbered move marker, instanced per legal move
+src/main/main.tscn               the scene: every node, material and the environment
+src/main/main.gd                 on Main: the turn loop and the input map, nothing else
 src/board/board.gd               pure lattice math, static, no nodes, no scene
+src/game/rules.gd                dice and what a cell does, static, measurable with no scene
+src/board/board_view.gd          on Board: every line drawn — grids, frames, links, F3 gizmo
+src/camera/cam_rig.gd            on CamRig: yaw, pitch, zoom, pan, the fit, the fly-to
+src/ghost/ghosts.gd              on Ghosts: the numbered markers
+src/ghost/ghost.tscn             one marker, instanced per legal move
+src/hud/hud.gd                   on HUD: formats the text, changes no state
+src/palette.gd                   every color in the game
 tests/                           test_board.gd, test_play.gd, test_readable.gd, shot.gd
 ```
+
+Each script owns one node and its children. Nothing reaches up the tree for a
+neighbour: `main.gd:_ready()` wires the cross-references (`rig.board`, `view3d.rig`,
+`ghosts.board`) in one place, and everything else talks through methods. `board.gd`
+and `rules.gd` stay nodeless so the lattice and the odds can be measured headless.
+
+**Cross-node calls kill `:=`.** A `var rig: Node3D` returns Variant from every method, so `var side := rig.perp(dir)` fails to parse with *"Cannot infer the type"* — the same gotcha as untyped containers. Annotate: `var side: Vector3 = rig.perp(dir)`.
 
 ### The one idea
 

@@ -42,3 +42,16 @@ const C_AXIS := [
 const C_YAW := Color(1.0, 0.55, 0.15)
 const C_PITCH := Color(0.70, 0.45, 1.0)
 const C_ROLL := Color(0.85, 0.85, 0.85)
+
+
+## Color for a `Rules.landing()` kind. The mapping lives here rather than at the
+## marker, so a new palette does not have to be chased across the view scripts.
+static func landing_color(kind: String) -> Color:
+	match kind:
+		"GOAL":
+			return C_GOAL
+		"LADDER":
+			return C_LADDER
+		"SNAKE":
+			return C_SNAKE
+	return C_MOVE
