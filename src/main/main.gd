@@ -376,6 +376,8 @@ func reroll() -> void:
 		return
 	rerolls -= 1
 	_roll(false)
+	# A reroll is the whole action: you spend the turn's time and stay where you are, so the chaser gets its step for it. That is what stops the token from being free time -- and unlike a roll, this is a step you chose to pay for.
+	_step_roamer()
 
 
 func _roll(spend_turn: bool) -> void:
@@ -396,8 +398,6 @@ func _roll(spend_turn: bool) -> void:
 	if trapped:
 		tray.flash_spares()
 	ghosts.show_moves(moves, links, foes)
-	# After the roll, not after the turn: a reroll is a roll, so the escape hatch costs a cell of distance. The markers stay up through a catch -- being caught takes a die, not the move you were about to make.
-	_step_roamer()
 	_redraw()
 	_refresh_hud()
 
@@ -467,6 +467,13 @@ func choose(i: int) -> void:
 	# Landing somewhere new changes which plane is lit and which frame is warm.
 	_redraw()
 	busy = false
+
+	# It moves after you do, not between your roll and your move. Stepping it on the roll meant a 4 that would have carried you clear could still be caught before you had touched a marker -- the roll is not the move, and being taken on a move you had not made yet is not a chase, it is a trap.
+	_step_roamer()
+	if not fight.is_empty():
+		_refresh_hud()
+		return
+
 	var at := Board.coords_to_index(coords, size)
 	if coords == roamer:
 		# You can walk into it as easily as it walks into you.

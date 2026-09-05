@@ -44,16 +44,28 @@ func _chase() -> void:
 	m.free()
 
 
-## A spent token moves it too -- that is what stops the escape hatch from being free time -- and being caught is a fight you did not get to frame.
+## It moves after you move -- never between your roll and your move, which would take you on a move you had not made yet. A spent token moves it too, because that is a turn's time bought and no ground covered.
 func _catch() -> void:
 	var m: Node3D = await _game()
-	m.rerolls = 1
-	m.roll = 1
-	var before: PackedInt32Array = m.roamer.duplicate()
-	m.reroll()
-	assert(m.roamer != before, "a reroll did not advance the chaser")
-	assert(m.rerolls == 0, "a reroll did not spend its token")
+
+	# Rolling is not moving: the chaser holds still until the move is actually made.
+	var parked: PackedInt32Array = m.roamer.duplicate()
+	m.do_roll()
+	assert(m.roamer == parked, "the chaser moved on the roll, before the move was made")
+	assert(not m.moves.is_empty(), "no legal move to test the order with")
+	m.choose(0)
+	await process_frame
+	assert(m.roamer != parked, "the chaser did not move after the move was made")
 	m.free()
+
+	var r: Node3D = await _game()
+	r.rerolls = 1
+	r.roll = 1
+	var before: PackedInt32Array = r.roamer.duplicate()
+	r.reroll()
+	assert(r.roamer != before, "a reroll did not advance the chaser")
+	assert(r.rerolls == 0, "a reroll did not spend its token")
+	r.free()
 
 	var c: Node3D = await _game()
 	# One cell away and one roll from the player, so the next step lands on them.
