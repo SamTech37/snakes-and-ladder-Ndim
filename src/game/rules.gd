@@ -8,6 +8,7 @@ extends RefCounted
 ## whole game over them.
 
 const Board = preload("res://src/board/board.gd")
+const MG = preload("res://src/game/minigames.gd")
 
 ## Boards D cycles through, so the higher-dimensional ones are reachable from inside
 ## the game rather than only by editing the export or a test script.
@@ -169,13 +170,18 @@ static var BOSS_DICE: Array[PackedInt32Array] = [
 ## A foe as plain data: its die, the contests it knows, and how much it tells you. A Dictionary rather than a class for the same reason `links` is one -- it is data the turn loop passes around, and nothing about it needs behaviour of its own.
 static func make_foe(rng: RandomNumberGenerator, boss := false, strong := false) -> Dictionary:
 	var pool := BOSS_DICE if boss or strong else FOE_DICE
-	var games: Array[int] = [0, 1, 2]
+	var faces: PackedInt32Array = pool[rng.randi_range(0, pool.size() - 1)]
+	var games: Array[int] = [0, 1]
+	# The parity pair only from a foe whose die is lopsided enough to read. On a balanced die either call is a coin flip with nothing in it to reason about, and a contest you cannot reason about is not a choice. They come as a pair because the call is the decision: one of them alone is a side you were assigned rather than one you took.
+	if MG.ALL[2].favours(faces) >= 0.5:
+		games.append(2)
+		games.append(3)
 	if not boss:
-		# A floor foe knows two of the three, so which contest it can reach for is part of what you read off it.
+		# A floor foe knows two of what it has, so which contest it can reach for is part of what you read off it.
 		games.shuffle()
-		games = games.slice(0, 2)
+		games = games.slice(0, 3 if games.size() > 2 else 2)
 	return {
-		"faces": pool[rng.randi_range(0, pool.size() - 1)],
+		"faces": faces,
 		"games": games,
 		# A boss always names the contest: the last thing it hands you is the choice of which die to lose.
 		"trait": OPEN if boss or rng.randi() % 2 == 0 else TELL,

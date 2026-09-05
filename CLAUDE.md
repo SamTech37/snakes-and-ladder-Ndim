@@ -68,7 +68,8 @@ Godot **4.6.3** (Forward+, Jolt physics), binary at `~/.local/bin/godot`. No bui
 godot                                              # main scene: src/main/main.tscn
 godot --headless --script tests/test_board.gd      # lattice math asserts
 godot --headless --script tests/test_play.gd       # random play-throughs of the real scene
-godot --headless --script tests/test_fight.gd      # the contests, the stake, the cap, the boss
+godot --headless --script tests/test_minigames.gd  # every contest, case by case, no scene
+godot --headless --script tests/test_fight.gd      # the stake, the cap, the boss, the key map
 godot --headless --script tests/test_run.gd        # the chaser and the climb
 godot --headless --script tests/odds.gd            # E[rolls] per board, solved not guessed
 
@@ -127,7 +128,7 @@ src/dice/tray.gd                 on Tray: the dice, the spare rerolls and the fo
 src/game/minigames.gd            the contests a fight is decided by, one class each, static
 src/autoload/audio.gd            autoload `Audio`: every sound, synthesised, no files
 src/palette.gd                   every color in the game
-tests/                           test_board.gd, test_play.gd, test_fight.gd, test_run.gd, odds.gd, test_readable.gd, shot.gd
+tests/                           test_board.gd, test_play.gd, test_minigames.gd, test_fight.gd, test_run.gd, odds.gd, test_readable.gd, shot.gd
 ```
 
 Each script owns one node and its children. Nothing reaches up the tree for a
@@ -208,7 +209,13 @@ The game is a run now: **the floor number and the dimension count are the same n
 
 **Every fight has to contain a decision.** An `OPEN` foe names the contest and leaves you the choice of which die to stake — which is no choice at all while you are holding one. Down to a single die, `_next_round()` treats it as `TELL` instead: the foe shows its die and the naming comes to you.
 
-`src/game/minigames.gd` holds the contests behind one interface — BIGGER (比大), SMALLER (比小), EVEN SUM (奇偶) — so 對子 or 吹牛 is a class and an entry in `ALL`. **Ties go to the foe.** `favours()` is the single place that says which die suits which contest, so the foe's own choice and any hint the HUD grows cannot disagree.
+`src/game/minigames.gd` holds the contests behind one interface — BIGGER (比大), SMALLER (比小), and the parity pair ODD SUM / EVEN SUM (奇偶) — so 對子 or 吹牛 is a class and an entry in `ALL`. **Add a contest, add its cases to `tests/test_minigames.gd`** — that file asserts every contest has a table and fails if one does not.
+
+**奇偶 takes a caller, so it is two contests.** A single EVEN SUM silently puts the player on the even side: a 2 against a 3 is an odd sum and a loss, which is exactly what the rule says and nothing like what the screen promises. Offering both calls makes picking one a bet — against a die that is mostly even, bet odd with an odd die. `favours()` is the single place that says which die suits which contest, so the foe's own choice and any hint that grows out of it cannot disagree.
+
+**A drawn round settles nothing and costs nothing** — the contest stands and the dice go again. Ties used to go to the foe, which quietly made every die with repeated faces worse than it looked, and losing a die because you *matched* is not a result anybody reads as fair.
+
+**EVEN SUM is only offered by a foe whose own die is lopsided.** Against a balanced spread of odd and even faces the sum's parity is a coin flip with nothing in it to reason about, and a contest you cannot reason about is not a choice. `make_foe()` gates it on `favours()`.
 
 A foe carries a **commit order**, which is the 分蛋糕 split — one side frames, the other chooses inside it. `OPEN` names the contest and leaves you the die; `TELL` shows its die and leaves you the contest. The two blind orders (commit first, learn after) are deliberately not built: they are only a bet once the player knows which die suits which contest.
 
@@ -227,6 +234,10 @@ Not the die's name beside its faces either — `d3` and `faces 1 2 3` are the sa
 `favours()` survives because the *foe* needs it to pick a contest. It never reaches the player.
 
 **A settled fight waits to be read.** `fight["over"]` holds `WON` / `LOST` / `FLOOR CLEARED` and nothing is applied until `SPACE`; the line says what that press is about to cost or pay. A fight that resolves and tidies itself away in one frame is one you find out about by counting the dice on your tray afterwards.
+
+**The music has three states** — `calm`, `fight`, and `over`. The game-over loop is the same two saws a fifth lower at half the tempo with the arpeggio gone: the arpeggio is the thing that was moving, so taking it away is what says nothing is moving any more.
+
+**Both dice turn.** A wireframe solid only reads as a solid while it moves, and one side of a fight sitting dead still while the other turns reads as the fight being one-sided.
 
 **A fight has to announce itself three ways.** A sting, the music swapping to the fight loop (`Audio.set_music()`, ducked rather than cut), and a ring thrown at the cell it happens on. Each round plays an opposite sound and an opposite-coloured ring, and the whole status line turns `C_FOE` for as long as the fight lasts. When it ends, `notice` carries what it cost or paid until the next roll — a fight that ends in silence leaves you looking at a tray with one fewer die on it and no idea why.
 

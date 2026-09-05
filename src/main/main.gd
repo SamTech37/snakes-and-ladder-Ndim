@@ -555,6 +555,13 @@ func _resolve() -> void:
 	var theirs := throw(foe["faces"])
 	tray.roll_to(mine)
 	tray.roll_foe(theirs)
+	# A drawn round costs nothing and settles nothing: the contest stands, the dice go again. Losing a die because you matched the foe is not a result anybody reads as fair, and handing ties to the foe quietly made every die with repeated faces worse than it looks.
+	if MG.ALL[g].draw(mine, theirs):
+		fight["used"].erase(g)
+		fight["last"] = "%s  %d v %d  DRAW, again" % [MG.ALL[g].label(), mine, theirs]
+		Audio.play("pick")
+		_refresh_hud()
+		return
 	var win: bool = MG.ALL[g].play(mine, theirs)
 	fight["last"] = "%s  %d v %d  %s" % [MG.ALL[g].label(), mine, theirs, "WON" if win else "LOST"]
 	# Opposite sounds and opposite colours: which way a round went should not have to be read.
@@ -634,6 +641,7 @@ func _pay_for_loss() -> void:
 		notice = "LOST the fight  -  your last die shattered"
 		kit.clear()
 		dead = true
+		Audio.set_music("over")
 		return
 	kit[0] = Rules.damaged(faces)
 	notice = "LOST the fight  -  your last die cracks to %s" % Rules.die_name(kit[0])

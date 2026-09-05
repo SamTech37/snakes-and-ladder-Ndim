@@ -54,7 +54,7 @@ func _ready() -> void:
 		voices.append(p)
 
 	# Two tracks, one player. The music is the loudest thing that can say a fight is on, and it costs one more generated buffer.
-	tracks = {"calm": _music(), "fight": _music_fight()}
+	tracks = {"calm": _music(), "fight": _music_fight(), "over": _music_over()}
 	music = AudioStreamPlayer.new()
 	music.volume_db = MUSIC_DB
 	music.stream = tracks["calm"]
@@ -189,6 +189,30 @@ func _music_fight() -> AudioStream:
 		var pad := (_wave(p1, "saw") + _wave(p2, "saw")) * 0.5
 		var arp := _wave(pa, "square") * pow(1.0 - u, 3.0)
 		data.encode_s16(i * 2, int(clampf(pad * 0.5 + arp * 0.4, -1.0, 1.0) * 32767.0))
+	var w := _wav(data)
+	w.loop_mode = AudioStreamWAV.LOOP_FORWARD
+	w.loop_end = n - 1
+	return w
+
+
+## The run is over. The same two saws, a fifth lower, half the tempo and no arpeggio at all -- the arpeggio is the thing that was moving, so taking it away is what says nothing is moving any more.
+func _music_over() -> AudioStream:
+	var roots := [55.0, 51.91, 49.0, 51.91]  # A1  G#1  G1  G#1
+	var bar := 3.0
+	var n := int(RATE * bar * roots.size())
+	var data := PackedByteArray()
+	data.resize(n * 2)
+	var p1 := 0.0
+	var p2 := 0.0
+	for i in n:
+		var t := float(i) / RATE
+		var root: float = roots[int(t / bar) % roots.size()]
+		p1 += root / RATE
+		p2 += root * 1.004 / RATE
+		var pad := (_wave(p1, "saw") + _wave(p2, "saw")) * 0.5
+		# A slow swell rather than a flat hold, so it breathes instead of droning.
+		var swell := 0.55 + 0.45 * sin(t * 0.6)
+		data.encode_s16(i * 2, int(clampf(pad * 0.5 * swell, -1.0, 1.0) * 32767.0))
 	var w := _wav(data)
 	w.loop_mode = AudioStreamWAV.LOOP_FORWARD
 	w.loop_end = n - 1

@@ -15,7 +15,7 @@ const Ghosts = preload("res://src/ghost/ghosts.gd")
 ## Which checks ran to the end. A failed `assert` does not stop a `--script` run -- it prints, abandons the function it is in, and returns to the caller, so a test can fail and the process still exit 0. Each check signs off when it finishes, and the run fails if a signature is missing.
 var done := {}
 
-const CHECKS := ["contests", "stake", "cap", "boss", "run_over", "keys"]
+const CHECKS := ["contests", "stake", "cap", "boss", "run_over", "keys", "draws"]
 
 
 func _initialize() -> void:
@@ -27,6 +27,7 @@ func _initialize() -> void:
 	await _boss()
 	await _run_over()
 	await _keys()
+	await _draws()
 
 	for c in CHECKS:
 		if not done.has(c):
@@ -39,29 +40,7 @@ func _initialize() -> void:
 
 ## Ties go to the foe in both comparisons -- you have to beat it, not match it.
 func _contests() -> void:
-	var bigger: MG.Minigame = MG.ALL[0]
-	assert(bigger.play(5, 3))
-	assert(not bigger.play(3, 5))
-	assert(not bigger.play(4, 4), "a tie is not a win")
-
-	var smaller: MG.Minigame = MG.ALL[1]
-	assert(smaller.play(2, 6))
-	assert(not smaller.play(6, 2))
-	assert(not smaller.play(4, 4), "a tie is not a win")
-
-	var even: MG.Minigame = MG.ALL[2]
-	assert(even.play(3, 5), "3 + 5 is even")
-	assert(even.play(2, 4))
-	assert(not even.play(1, 2))
-
-	# The one place that says which die suits which contest. A big die has to be worth more at BIGGER than a small one, and the other way round at SMALLER -- that opposition is what stops one die from being the answer to everything.
-	var big := PackedInt32Array([4, 5, 6])
-	var small := PackedInt32Array([1, 2, 3])
-	assert(bigger.favours(big) > bigger.favours(small))
-	assert(smaller.favours(small) > smaller.favours(big))
-	# Certainty is the edge at EVEN SUM, either way round.
-	assert(even.favours(PackedInt32Array([2, 4, 6])) > even.favours(PackedInt32Array([1, 2])))
-
+	# The contests themselves are covered case by case in tests/test_minigames.gd. What matters here is that a fight drives them at all.
 	# One die per dimension of the floor you are standing on.
 	assert(Rules.kit_cap(PackedInt32Array([6, 6, 6])) == 3)
 	assert(Rules.kit_cap(PackedInt32Array([10, 10])) == 2)
@@ -256,6 +235,33 @@ func _keys() -> void:
 func _read(m: Node3D) -> void:
 	if not m.fight.is_empty() and m.fight["over"] != "":
 		m._settle()
+
+
+## A drawn round settles nothing and costs nothing: the contest stands and the dice go again. Handing ties to the foe made every die with repeated faces quietly worse than it looked.
+func _draws() -> void:
+	var m: Node3D = await _game()
+	m.kit = _kit([PackedInt32Array([3, 3])])
+	m.die_index = 0
+	# Threes against threes at BIGGER: every round is a draw.
+	m._start_fight(_foe(PackedInt32Array([3, 3]), [0], Rules.OPEN), 0)
+	for _i in 3:
+		m._resolve()
+		assert(m.fight["over"] == "", "a drawn round settled the fight")
+		assert(m.fight["wins"] == 0 and m.fight["losses"] == 0, "a draw was scored")
+		assert(m.fight["used"].is_empty(), "a draw used the contest up")
+		assert(m.kit[0].size() == 2, "a draw cost a die")
+		assert(m.fight["last"].ends_with("DRAW, again"), "a draw did not say so")
+
+	# EVEN SUM is only ever offered by a foe whose die is lopsided enough to read. On a balanced die the sum's parity is a coin flip and there is nothing in it to choose.
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 11
+	for _i in 200:
+		var f := Rules.make_foe(rng, _i % 3 == 0)
+		if f["games"].has(2):
+			assert(MG.ALL[2].favours(f["faces"]) >= 0.5,
+					"%s offers EVEN SUM as a coin flip" % Rules.die_name(f["faces"]))
+	done["draws"] = true
+	m.free()
 
 
 func _kit(dice: Array) -> Array[PackedInt32Array]:

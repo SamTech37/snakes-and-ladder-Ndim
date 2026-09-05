@@ -66,6 +66,9 @@ func _process(delta: float) -> void:
 	var d: Node3D = dice[picked]
 	if d.visible:
 		d.rotation.y += delta * 0.7
+	# The foe's die turns as well, and the other way. A wireframe solid only reads as a solid while it moves, and one side of a fight sitting dead still while the other turns reads as the fight being one-sided.
+	if foe.visible:
+		foe.rotation.y -= delta * 0.55
 
 
 ## Bottom-left of whatever the viewport is now, computed from the camera's own frustum
