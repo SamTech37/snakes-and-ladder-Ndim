@@ -37,3 +37,18 @@ Skills: passive skills provided by special/rare dies. e.g. can ignore Snakes, at
 the oracle die: a sphere, ask input for what roll of number you want, and gives you exactly that.
 
 the devil's die: no. faces = D, each direction gets a different value. you still pick one axis to move along.
+
+5. roamers should roam, not hunt
+
+playtested: the chaser is diabolical. it follows you to the edge of the world and turns every turn into pressure, which is exactly what the navigation game did not need. it also drags the endgame stall — already the tense part — into being the dangerous part.
+
+replace it with two kinds of thing that stay where they belong:
+- **standers**: fixed foes on cells, as now. you choose to walk into them.
+- **roamers**: wander their own patch — a plane, a deck, a neighbourhood — and you meet one by being in the wrong place, not by being hunted. no pursuit, no distance readout, no clock.
+
+the point is that the board stays somewhere you can look at and think in.
+
+6. session plan
+
+- **1.5** — undo the damage this session's solutions caused. the chaser above, and whatever else the playtest says is worse than what it replaced.
+- **2** — spec, plan, then implement: sane mechanisms for the RNG (what dice appear, how foes are drawn, how gifts are placed) and for map generation (job iii — difficulty curve, reachable snakes, chain reactions).

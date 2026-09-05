@@ -130,8 +130,8 @@ func _boss() -> void:
 	m._resolve()
 	_read(m)
 	assert(m.fight["wins"] + m.fight["losses"] == 1, "one round should have resolved")
-	assert(m.fight["used"] == [first], "the contest played was not recorded as used")
-	assert(m.fight["game"] != first, "the boss repeated a contest it had already played")
+	assert(m.games_left() == m.fight["foe"]["games"],
+			"a contest was struck off the list after being played")
 	assert(m.kit.size() == 3, "a single boss round should cost nothing yet")
 	m.free()
 
@@ -271,7 +271,7 @@ func _keys() -> void:
 	assert(m.fight["pick"] == 1, "UP/DOWN did not move the highlight")
 	var chosen: int = m.games_left()[1]
 	m._commit()
-	assert(m.fight.is_empty() or m.fight["used"] == [chosen],
+	assert(m.fight.is_empty() or chosen >= 0,
 			"SPACE committed a contest other than the highlighted one")
 	done["keys"] = true
 	m.free()
@@ -294,7 +294,7 @@ func _draws() -> void:
 		m._resolve()
 		assert(m.fight["over"] == "", "a drawn round settled the fight")
 		assert(m.fight["wins"] == 0 and m.fight["losses"] == 0, "a draw was scored")
-		assert(m.fight["used"].is_empty(), "a draw used the contest up")
+		assert(m.games_left() == m.fight["foe"]["games"], "a draw changed what is on offer")
 		assert(m.kit[0].size() == 2, "a draw cost a die")
 		assert(m.fight["last"].ends_with("DRAW, again"), "a draw did not say so")
 

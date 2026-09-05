@@ -84,6 +84,7 @@ godot --headless --script tests/test_play.gd       # random play-throughs of the
 godot --headless --script tests/test_minigames.gd  # every contest, case by case, no scene
 godot --headless --script tests/test_fight.gd      # the stake, the cap, the boss, the key map
 godot --headless --script tests/test_run.gd        # the chaser and the climb
+godot --headless --script tests/test_deadend.gd    # whole runs: there is always something to press
 godot --headless --script tests/odds.gd            # E[rolls] per board, solved not guessed
 
 # Scripts are interpreted, so a typo only surfaces when the scene loads. Check before
@@ -145,7 +146,7 @@ src/dice/tray.gd                 on Tray: the dice, the spare rerolls and the fo
 src/game/minigames.gd            the contests a fight is decided by, one class each, static
 src/autoload/audio.gd            autoload `Audio`: every sound, synthesised, no files
 src/palette.gd                   every color in the game
-tests/                           test_board.gd, test_play.gd, test_minigames.gd, test_fight.gd, test_run.gd, odds.gd, test_readable.gd, shot.gd
+tests/                           test_board.gd, test_play.gd, test_minigames.gd, test_fight.gd, test_run.gd, test_deadend.gd, odds.gd, test_readable.gd, shot.gd, shots.gd
 ```
 
 Each script owns one node and its children. Nothing reaches up the tree for a
@@ -337,6 +338,10 @@ Three effects, all `Tween`-driven into the board's own `ImmediateMesh` so they s
 ## Not Built Yet
 
 Solo play only. No menus or save. Ghost markers are chosen by number key, not clicked — numbers still work when 5D offers ten directions. A cross-panel link in SPREAD shows a stub at each end but does not say which panel it lands in; FOCUS is where you read that.
+
+**Dead ends are found by deriving them, not by playing.** `tests/test_deadend.gd` drives whole runs toward the goal with everything switched on and asserts after every step that the player has something to press, and that each floor is finishable. Every dead end this project shipped — a kit of dice that all move in threes, a boss that struck contests off its own list until none were left, a kit outgrowing the tray and crashing it — was derivable without anyone playing. The budget is **per floor**: the run is endless by design, so asserting that a run finishes measures nothing but how fast the climb outruns the budget.
+
+**Photographing a state:** `tests/shots.gd` takes a state name (`fight-tell`, `result-lost`, `cleared`, `dead`, `big-kit`, `glossary`, …) or `all` for a contact sheet. Needs a display and the foreground, like the other GUI scripts.
 
 ## Session Wrap-Up Protocol
 

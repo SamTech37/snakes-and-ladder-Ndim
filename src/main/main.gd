@@ -159,8 +159,6 @@ func new_game(keep := false) -> void:
 	if not (keep and carry_tokens):
 		rerolls = 0
 	die_index = mini(die_index, kit.size() - 1)
-	# The chaser scales by its dice rather than its speed: a two-step chaser cannot be anticipated in a projected 4D view, and a clock you cannot read is an ambush rather than pressure.
-	roamer_foe = Rules.make_foe(rng, false, size.size() >= 4)
 	rig.pan = Vector2.ZERO
 	# Before anything is placed. Every cell is handed to the projection as coordinates, and coordinates for this board read against the last one are out of bounds on the axis this board just grew.
 	view3d.size = size
@@ -299,8 +297,10 @@ func _step_roamer() -> void:
 		_start_fight(roamer_foe, ROAMER_CELL)
 
 
-## Puts it back at arm's length after a fight. Without this it stands on you and picks a fight on every roll from here to the goal.
+## Puts it back at arm's length after a fight, carrying a different die than the one you just beat. It used to be made once per floor, so every catch was the same foe with the same faces -- win four of them and you were holding four copies of one die.
 func _reset_roamer() -> void:
+	# The chaser scales by its dice rather than its speed: a two-step chaser cannot be anticipated in a projected 4D view, and a clock you cannot read is an ambush rather than pressure.
+	roamer_foe = Rules.make_foe(rng, false, size.size() >= 4)
 	if not roamer_on:
 		roamer = PackedInt32Array()
 		roamer_node.visible = false
@@ -539,7 +539,7 @@ func _start_fight(foe: Dictionary, cell: int) -> void:
 	view3d.fight_flash(coords)
 	notice = ""
 	fight = {"foe": foe, "cell": cell, "game": -1, "pick": 0, "wins": 0, "losses": 0,
-			"used": [], "last": "", "over": ""}
+			"last": "", "over": ""}
 	tray.set_foe(foe["faces"])
 	_next_round()
 
@@ -566,17 +566,11 @@ func _foe_picks(foe: Dictionary) -> int:
 	return best
 
 
-## Contests this foe can still reach for: the ones it has not used, and all of them again once it has run out.
+## The contests this foe knows. All of them, every round.
 ##
-## A boss takes three rounds and may only carry two contests, so "a different one each round" cannot be a rule -- it was, and the third round of such a fight came up with an empty list: nothing to pick, nothing drawn, and SPACE doing nothing at all. Preferring a fresh contest is worth having; running out of them is not a state the game may be in.
+## They used to be struck off as they were played, which was never a rule anybody asked for -- it was invented here, and then a boss carrying two contests ran out of them on its third round and the fight had nothing to offer and no way forward. A bag you take from and do not refill is a dead end waiting for the right foe.
 func games_left() -> Array:
-	var out := []
-	for g in fight["foe"]["games"]:
-		if not fight["used"].has(g):
-			out.append(g)
-	if out.is_empty():
-		out.assign(fight["foe"]["games"])
-	return out
+	return fight["foe"]["games"]
 
 
 func _resolve() -> void:
@@ -586,14 +580,12 @@ func _resolve() -> void:
 		var left := games_left()
 		fight["game"] = left[mini(fight["pick"], left.size() - 1)]
 	var g: int = fight["game"]
-	fight["used"].append(g)
 	var mine := throw(die())
 	var theirs := throw(foe["faces"])
 	tray.roll_to(mine)
 	tray.roll_foe(theirs)
 	# A drawn round costs nothing and settles nothing: the contest stands, the dice go again. Losing a die because you matched the foe is not a result anybody reads as fair, and handing ties to the foe quietly made every die with repeated faces worse than it looks.
 	if MG.ALL[g].draw(mine, theirs):
-		fight["used"].erase(g)
 		fight["last"] = "%s  %d v %d  DRAW, again" % [MG.ALL[g].label(), mine, theirs]
 		Audio.play("pick")
 		_refresh_hud()

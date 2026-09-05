@@ -35,7 +35,11 @@ var dice: Array[Node3D] = []
 ## The foe's die, on the opposite corner of the frame, facing the kit. A fight is two dice looking at each other -- the same thing the tray already is, mirrored.
 @onready var foe: MeshInstance3D = $Foe
 
+## Slot of the picked die within the window, not its index in the kit.
 var picked := 0
+
+## First kit index the tray is showing. The kit can outgrow the slots; the window slides rather than the tray lying about what is held.
+var offset := 0
 var spare_count := 0
 var anim := true
 
@@ -89,12 +93,16 @@ func _layout() -> void:
 
 
 ## Shows the kit, and puts every face label back to the die's name -- a die that has been rolled and moved with is showing a number that has already been spent, and a spent number where a name should be is just a wrong label.
-## A board with one die shows one die. Each entry is a die's list of face values, so the silhouette counts its *sides* and the label spells the faces.
+##
+## There is no cap on the kit and there are only so many slots, so this is a **window** onto it, slid to keep the picked die on screen. Without the window the tray simply indexed past its own dice and took the game down the moment a ninth was won.
 func set_kit(kit: Array[PackedInt32Array], sel: int) -> void:
-	picked = sel
+	# The window starts where it has to for `sel` to fall inside it.
+	offset = clampi(sel - dice.size() + 1, 0, maxi(0, kit.size() - dice.size()))
+	picked = sel - offset
 	for i in dice.size():
 		var d: Node3D = dice[i]
-		d.visible = i < kit.size()
+		var idx := offset + i
+		d.visible = idx < kit.size()
 		if not d.visible:
 			continue
 		var on := i == picked
@@ -102,12 +110,12 @@ func set_kit(kit: Array[PackedInt32Array], sel: int) -> void:
 		d.scale = Vector3.ONE * (1.0 if on else 0.68)
 		var c: Color = Pal.C_MOVE if on else Pal.C_MOVE * 0.45
 		# One side per face, so the shape counts the die out for you.
-		d.mesh = _bipyramid(kit[i].size(), 0.11, 0.16)
+		d.mesh = _bipyramid(kit[idx].size(), 0.11, 0.16)
 		d.material_override = _mat(c)
 		if not on:
 			d.rotation = Vector3.ZERO
 		var face: Label3D = d.get_node("Face")
-		face.text = Rules.die_name(kit[i])
+		face.text = Rules.die_name(kit[idx])
 		face.modulate = c
 
 
@@ -184,7 +192,7 @@ func die_at(pos: Vector2) -> int:
 	for i in dice.size():
 		var d: Node3D = dice[i]
 		if d.visible and cam.unproject_position(d.global_position).distance_to(pos) < HIT_PX:
-			return i
+			return offset + i
 	return -1
 
 
