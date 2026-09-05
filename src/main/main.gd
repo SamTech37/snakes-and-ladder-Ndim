@@ -9,6 +9,7 @@ extends Node3D
 
 const Board = preload("res://src/board/board.gd")
 const Rules = preload("res://src/game/rules.gd")
+const MG = preload("res://src/game/minigames.gd")
 
 enum View { SPREAD, FOCUS }
 
@@ -17,6 +18,10 @@ enum View { SPREAD, FOCUS }
 ## Manhattan cap on a link's reach. Uncapped endpoints gave full-width lines that
 ## crossed everything and skipped most of the board in one move.
 @export var link_span := 5
+## Foes standing on the floor. Off (0) leaves a board with nothing to fight on the way, which is how test_play.gd keeps measuring that a random walk still reaches the goal.
+@export var foe_count := 5
+## The boss on the goal cell. Off means reaching the goal wins outright.
+@export var boss_fight := true
 ## Off makes every hop instant, so test_play.gd can run games without waiting on tweens.
 @export var anim := true
 
@@ -29,6 +34,19 @@ enum View { SPREAD, FOCUS }
 
 var coords := PackedInt32Array()
 var links := {}
+
+## cell index -> foe. A foe leaves its cell once it has been fought, won or lost.
+var foes := {}
+
+## The foe standing on the goal. Best of three, and the only fight on the floor you cannot walk around.
+var boss := {}
+
+## The fight in progress, empty between them. A Dictionary rather than a class for the same reason a foe is one: the turn loop owns the state, and the fight is a state the turn is in rather than an object with a life of its own.
+var fight := {}
+
+## No dice left. The run is over -- there is nothing to roll and nothing to stake.
+var dead := false
+
 var roll := 0
 var moves := []
 var turns := 0
@@ -41,10 +59,7 @@ var rng := RandomNumberGenerator.new()
 ## using rather than snapping to the default. SPREAD is deliberately not remembered.
 var parked := {}
 
-## The dice held. Each die is its list of face values, not a face count: a won die can
-## read [1,1,5,5], which is streaky, or [3,3,3], which is certain. Run state rather
-## than something derived from `size`, because dice are won and lost and have to
-## outlive the board they were picked up on.
+## The dice held. Each die is its list of face values, not a face count: a won die can read [1,1,5,5], which is streaky, or [3,3,3], which is certain. Run state rather than something derived from `size`, because dice are won and lost and have to outlive the board they were picked up on.
 var kit: Array[PackedInt32Array] = []
 
 ## Which die in `kit` the next roll uses. A big die is dead weight against a wall --
@@ -86,6 +101,13 @@ func _ready() -> void:
 func new_game() -> void:
 	coords = Board.index_to_coords(0, size)
 	links = Board.gen_links(size, link_count, rng, link_span)
+	foes = {}
+	for c in Board.gen_foes(size, foe_count, rng, links):
+		foes[c] = Rules.make_foe(rng)
+	boss = Rules.make_foe(rng, true) if boss_fight else {}
+	fight = {}
+	dead = false
+	tray.clear_foe()
 	turns = 0
 	roll = 0
 	moves = []
@@ -106,7 +128,7 @@ func new_game() -> void:
 
 ## Board and markers follow the game state; called whenever either changes.
 func _redraw() -> void:
-	view3d.sync(coords, links, moves)
+	view3d.sync(coords, links, moves, foes)
 
 
 func _refresh_hud() -> void:
@@ -114,7 +136,7 @@ func _refresh_hud() -> void:
 		"coords": coords, "size": size, "links": links, "moves": moves,
 		"roll": roll, "turns": turns, "won": won,
 		"kit": kit, "die_index": die_index,
-		"rerolls": rerolls,
+		"rerolls": rerolls, "foes": foes, "fight": fight, "dead": dead,
 		"mode": "SPREAD" if view == View.SPREAD else "FOCUS",
 	})
 
@@ -129,6 +151,11 @@ func _refresh_tray() -> void:
 ## The die currently selected, as its list of face values.
 func die() -> PackedInt32Array:
 	return kit[die_index]
+
+
+## One roll of a die. Every face is equally likely and a die may carry the same value twice, so this indexes the list rather than taking a range.
+func throw(faces: PackedInt32Array) -> int:
+	return faces[rng.randi_range(0, faces.size() - 1)]
 
 
 ## Layout, camera and everything sitting on the board move together, so the deck
@@ -206,8 +233,7 @@ func reroll() -> void:
 
 
 func _roll(spend_turn: bool) -> void:
-	var faces := die()
-	roll = faces[rng.randi_range(0, faces.size() - 1)]
+	roll = throw(die())
 	if spend_turn:
 		turns += 1
 	moves = Board.legal_moves(coords, size, roll)
@@ -222,7 +248,7 @@ func _roll(spend_turn: bool) -> void:
 	_refresh_tray()
 	if trapped:
 		tray.flash_spares()
-	ghosts.show_moves(moves, links)
+	ghosts.show_moves(moves, links, foes)
 	_redraw()
 	_refresh_hud()
 
@@ -242,9 +268,17 @@ func _pick_die(i: int) -> void:
 ## it up, a spare spends it. Board cells stay on the number keys, which is what keeps
 ## working when 5D offers ten directions.
 func _click(pos: Vector2) -> void:
-	if busy or won:
+	if busy or won or dead:
 		return
 	var i: int = tray.die_at(pos)
+	# Mid-fight the tray is the fight: a die is the one you stake, or the one you drop to make room for what you just won.
+	if not fight.is_empty():
+		if i >= 0:
+			if fight["discard"]:
+				_discard(i)
+			elif fight["game"] >= 0:
+				_pick_die(i)
+		return
 	if i >= 0:
 		if moves.is_empty():
 			_pick_die(i)
@@ -273,12 +307,156 @@ func choose(i: int) -> void:
 
 	# Landing somewhere new changes which plane is lit and which frame is warm.
 	_redraw()
-	won = Board.dist_to_goal(coords, size) == 0
-	if won:
-		Audio.play("win")
-		view3d.win_burst()
 	busy = false
+	var at := Board.coords_to_index(coords, size)
+	if foes.has(at):
+		_start_fight(foes[at], at)
+	elif Board.dist_to_goal(coords, size) == 0:
+		# The goal is where the boss stands. Reaching it is arriving at the fight, not winning -- otherwise the floor could be sprinted past for free.
+		if boss.is_empty():
+			_win()
+		else:
+			_start_fight(boss, -1)
 	_refresh_hud()
+
+
+func _win() -> void:
+	won = true
+	Audio.play("win")
+	view3d.win_burst()
+
+
+## A fight is one contest, decided on one roll each -- a beat inside the turn, not a mode you leave the board for. The boss takes two of three.
+##
+## **The die you stake is the die you commit.** Lose and the foe takes that one, so the question is never only which die wins the contest: it is also which die you can afford to lose. `cell` is the foe's cell, or -1 for the boss, which stands on the goal and is not in `foes`.
+func _start_fight(foe: Dictionary, cell: int) -> void:
+	Audio.play("snake")
+	fight = {"foe": foe, "cell": cell, "game": -1, "wins": 0, "losses": 0,
+			"used": [], "discard": false, "last": ""}
+	tray.set_foe(foe["faces"])
+	_next_round()
+
+
+## Who frames the contest and who chooses inside it -- the 分蛋糕 split. OPEN, the foe names the game and the choice left to you is which die to stake; TELL, its die is already on the table and the choice is which contest to hold it in.
+func _next_round() -> void:
+	var foe: Dictionary = fight["foe"]
+	fight["game"] = _foe_picks(foe) if foe["trait"] == Rules.OPEN else -1
+	_refresh_hud()
+
+
+## The foe reaches for whatever its own die is best at. One place decides that, so its choice and any hint the HUD grows cannot disagree.
+func _foe_picks(foe: Dictionary) -> int:
+	var best := -1
+	var best_f := -1.0
+	for g in games_left():
+		var f: float = MG.ALL[g].favours(foe["faces"])
+		if f > best_f:
+			best_f = f
+			best = g
+	return best
+
+
+## Contests this foe has not already used. A boss plays three different ones, so a round it has won is a round it cannot repeat.
+func games_left() -> Array:
+	var out := []
+	for g in fight["foe"]["games"]:
+		if not fight["used"].has(g):
+			out.append(g)
+	return out
+
+
+## A number key inside a fight: which contest, if the foe left that open, otherwise which die to stake.
+func _fight_key(i: int) -> void:
+	if fight["discard"]:
+		_discard(i)
+		return
+	if fight["game"] >= 0:
+		_pick_die(i)
+		return
+	var left := games_left()
+	if i < left.size():
+		fight["game"] = left[i]
+		_resolve()
+
+
+func _resolve() -> void:
+	var foe: Dictionary = fight["foe"]
+	var g: int = fight["game"]
+	fight["used"].append(g)
+	var mine := throw(die())
+	var theirs := throw(foe["faces"])
+	tray.roll_to(mine)
+	tray.roll_foe(theirs)
+	var win: bool = MG.ALL[g].play(mine, theirs)
+	fight["last"] = "%d v %d  %s" % [mine, theirs, "WON" if win else "LOST"]
+	if win:
+		fight["wins"] += 1
+	else:
+		fight["losses"] += 1
+	# A boss takes two of three; everything else is settled on the one roll.
+	var need := 2 if foe["boss"] else 1
+	if fight["wins"] >= need:
+		_fight_won()
+	elif fight["losses"] >= need:
+		_fight_lost()
+	else:
+		_next_round()
+	_refresh_hud()
+
+
+func _fight_won() -> void:
+	var foe: Dictionary = fight["foe"]
+	Audio.play("ladder")
+	if foe["boss"]:
+		_end_fight()
+		_win()
+		return
+	foes.erase(fight["cell"])
+	kit.append(foe["faces"])
+	# Over the cap, taking a die means dropping one. That is the whole cost of winning: the kit's shape is bounded even when your luck is not.
+	if kit.size() > Rules.kit_cap(size):
+		fight["discard"] = true
+		_refresh_tray()
+		return
+	_end_fight()
+
+
+func _fight_lost() -> void:
+	var foe: Dictionary = fight["foe"]
+	Audio.play("snake")
+	foes.erase(fight["cell"])
+	_lose_die(die_index)
+	if dead:
+		_end_fight()
+		return
+	# A lost boss is not a wall: you are still standing on the goal, so it comes straight back. Each attempt costs a die, which is how a weak kit bleeds out rather than getting locked out of the game with nothing left to do.
+	if foe["boss"]:
+		_start_fight(foe, -1)
+		return
+	_end_fight()
+
+
+func _lose_die(i: int) -> void:
+	kit.remove_at(i)
+	die_index = clampi(die_index, 0, maxi(0, kit.size() - 1))
+	dead = kit.is_empty()
+
+
+func _discard(i: int) -> void:
+	if i >= kit.size():
+		return
+	kit.remove_at(i)
+	die_index = clampi(die_index, 0, kit.size() - 1)
+	Audio.play("pick")
+	_end_fight()
+
+
+func _end_fight() -> void:
+	fight = {}
+	tray.clear_foe()
+	_refresh_tray()
+	_refresh_hud()
+	_redraw()
 
 
 func _hop(dest: PackedInt32Array, secs: float, trans: Tween.TransitionType) -> void:
@@ -359,18 +537,24 @@ func _unhandled_input(event: InputEvent) -> void:
 			view3d.debug = not view3d.debug
 			_redraw()
 			_refresh_hud()
-		elif busy or won:
+		elif busy or won or dead:
 			return
-		elif event.is_action_pressed("ui_accept") and moves.is_empty():
-			do_roll()
+		elif event.is_action_pressed("ui_accept"):
+			# Same key, one meaning: throw. Mid-fight it throws the die you have picked against the foe's, once the contest is known.
+			if not fight.is_empty():
+				if fight["game"] >= 0 and not fight["discard"]:
+					_resolve()
+			elif moves.is_empty():
+				do_roll()
 		elif event.keycode == KEY_M:
 			Audio.toggle_mute()
 		elif event.keycode == KEY_X:
 			reroll()
 		elif event.keycode >= KEY_1 and event.keycode <= KEY_9:
-			# Same keys, two disjoint states: markers on the board means they are
-			# choosing a move, no markers means they are choosing the next die.
-			if moves.is_empty():
+			# Same keys, disjoint states: a fight means they are choosing a contest, a die to stake or a die to drop; markers on the board mean they are choosing a move; neither means they are choosing the next die.
+			if not fight.is_empty():
+				_fight_key(event.keycode - KEY_1)
+			elif moves.is_empty():
 				_pick_die(event.keycode - KEY_1)
 			else:
 				choose(event.keycode - KEY_1)

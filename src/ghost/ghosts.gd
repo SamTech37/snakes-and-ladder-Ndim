@@ -10,7 +10,8 @@ const Pal = preload("res://src/palette.gd")
 ## Which child of ghost.tscn is shown for each `Rules.landing()` kind. Shape as well as
 ## color, so the marker still says what it does to a player who cannot tell the two
 ## greens apart -- and so it reads at a glance rather than by comparison.
-const SHAPE := {"": "Plain", "LADDER": "Ladder", "SNAKE": "Snake", "GOAL": "Goal"}
+const SHAPE := {"": "Plain", "LADDER": "Ladder", "SNAKE": "Snake", "GOAL": "Goal",
+		"FOE": "Foe"}
 
 @export var ghost_scene: PackedScene
 
@@ -23,13 +24,13 @@ var moves := []
 var mats := {}
 
 
-func show_moves(m: Array, links: Dictionary) -> void:
+func show_moves(m: Array, links: Dictionary, foes := {}) -> void:
 	clear()
 	moves = m
 	for i in moves.size():
 		var g := ghost_scene.instantiate()
 		g.get_node("Number").text = str(i + 1)
-		var kind := Rules.landing(moves[i]["coords"], board.size, links)
+		var kind := Rules.landing(moves[i]["coords"], board.size, links, foes)
 		var c := Pal.landing_color(kind)
 		var shape: MeshInstance3D = g.get_node(SHAPE[kind])
 		shape.visible = true

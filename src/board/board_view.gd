@@ -54,6 +54,9 @@ var coords := PackedInt32Array()
 var links := {}
 var moves := []
 
+## cell index -> foe. Drawn on the board and not only on the markers: steering around a fight is a real move, and you cannot steer around something you can only see once it is already one step away.
+var foes := {}
+
 
 func world(c: PackedInt32Array) -> Vector3:
 	return Board.coords_to_world(c, size, spread)
@@ -68,10 +71,11 @@ func cell_count() -> int:
 
 
 ## Takes the turn's state and redraws. The only entry point the turn loop needs.
-func sync(c: PackedInt32Array, l: Dictionary, m: Array) -> void:
+func sync(c: PackedInt32Array, l: Dictionary, m: Array, f := {}) -> void:
 	coords = c
 	links = l
 	moves = m
+	foes = f
 	redraw()
 
 
@@ -119,6 +123,7 @@ func redraw() -> void:
 		_plane_frame(im, p, (Pal.C_HERE if p == here else Pal.C_FRAME) * _fade(p, lit))
 
 	_goal_beacon(im, world(Board.goal_coords(size)))
+	_draw_foes(im, lit)
 	_preview_links(im)
 	_draw_fx(im)
 	if debug:
@@ -150,6 +155,21 @@ func _goal_beacon(im: ImmediateMesh, at: Vector3) -> void:
 	# Spikes past the cage, so it still reads when the cage is edge-on.
 	for v in [Vector3.UP, Vector3.DOWN, Vector3.RIGHT, Vector3.LEFT]:
 		_line(im, at + v * r * 0.5, at + v * (h + 0.35), Pal.C_GOAL)
+
+
+## Every foe on the board, all the time -- not only the ones a marker is standing on. Deciding to walk the long way round a fight needs the fight to be visible from further off than one roll.
+##
+## A four-pointed star lying in the plane: the same silhouette the FOE marker carries, small enough that a cell holding one still reads as a cell.
+func _draw_foes(im: ImmediateMesh, lit: Dictionary) -> void:
+	for idx in foes:
+		var c := cell(idx)
+		var at := world(c)
+		var color: Color = Pal.C_FOE * _fade(Board.plane_of(c, size), lit)
+		var r := 0.34
+		for v in [Vector3.RIGHT, Vector3.UP]:
+			_line(im, at - v * r, at + v * r, color)
+		for v in [Vector3(0.7, 0.7, 0.0), Vector3(-0.7, 0.7, 0.0)]:
+			_line(im, at - v * r * 0.6, at + v * r * 0.6, color)
 
 
 ## Landing somewhere is a thing that happened to a cell, so the cell says so: a ring

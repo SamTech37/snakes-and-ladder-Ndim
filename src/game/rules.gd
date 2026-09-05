@@ -36,8 +36,7 @@ static var SIZES: Array[PackedInt32Array] = [
 const DICE := [6, 3]
 
 
-## The starting kit on this board, capped and deduplicated. On a 4-wide lattice both
-## dice cap to 3, and offering the same die twice is noise.
+## The starting kit on this board, capped and deduplicated. On a 4-wide lattice both dice cap to 3, and offering the same die twice is noise.
 static func kit(size: PackedInt32Array) -> Array[PackedInt32Array]:
 	var out: Array[PackedInt32Array] = []
 	for d in DICE:
@@ -47,9 +46,7 @@ static func kit(size: PackedInt32Array) -> Array[PackedInt32Array]:
 	return out
 
 
-## A plain die as a list of faces: 1..n, capped to what this board can use. A die is a
-## list rather than a count because a die won off a foe need not be plain -- [1,1,5,5]
-## is streaky and [3,3,3] is certain, and both have to roll through the same code.
+## A plain die as a list of faces: 1..n, capped to what this board can use. A die is a list rather than a count because a die won off a foe need not be plain -- [1,1,5,5] is streaky and [3,3,3] is certain, and both have to roll through the same code.
 static func faces_for(die: int, size: PackedInt32Array) -> PackedInt32Array:
 	var out := PackedInt32Array()
 	for v in range(1, die_faces(die, size) + 1):
@@ -57,10 +54,8 @@ static func faces_for(die: int, size: PackedInt32Array) -> PackedInt32Array:
 	return out
 
 
-## What to call a die. Plain 1..n is "d5"; anything else is spelled out, because a
-## count would be a lie about a die whose faces are not 1..n.
-## ponytail: no separator -- every face on a playable board is a single digit, and the
-## silhouette already counts the sides. Revisit if a face ever goes above 9.
+## What to call a die. Plain 1..n is "d5"; anything else is spelled out, because a count would be a lie about a die whose faces are not 1..n.
+## ponytail: no separator -- every face on a playable board is a single digit, and the silhouette already counts the sides. Revisit if a face ever goes above 9.
 static func die_name(faces: PackedInt32Array) -> String:
 	for i in faces.size():
 		if faces[i] != i + 1:
@@ -93,13 +88,59 @@ static func die_faces(die: int, size: PackedInt32Array) -> int:
 
 ## What landing on `cell` does: "" for plain floor. One source for the marker's color,
 ## its shape and the word in the move list, so the three cannot drift apart.
-## ponytail: events and foes are not designed yet -- add their case here, and their
-## color to the palette, when they exist.
-static func landing(cell: PackedInt32Array, size: PackedInt32Array, links: Dictionary) -> String:
+## `foes` is optional because a caller that has no foes to show -- a test measuring the lattice, say -- should not have to invent an empty one.
+static func landing(cell: PackedInt32Array, size: PackedInt32Array, links: Dictionary,
+		foes := {}) -> String:
 	var idx := Board.coords_to_index(cell, size)
+	# The goal is where the boss stands, so GOAL already says "a fight is here".
 	if idx == Board.total_cells(size) - 1:
 		return "GOAL"
+	if foes.has(idx):
+		return "FOE"
 	if not links.has(idx):
 		return ""
 	var to := Board.index_to_coords(links[idx], size)
 	return "LADDER" if Board.dist_to_goal(to, size) < Board.dist_to_goal(cell, size) else "SNAKE"
+
+
+## How many dice you may hold: one per dimension of the floor you are standing on. The cap is the whole cost of winning a die -- over it, taking one means dropping one.
+static func kit_cap(size: PackedInt32Array) -> int:
+	return size.size()
+
+
+## How much a foe tells you before you commit. The 分蛋糕 split: one side frames the contest, the other picks inside it. OPEN -- it names the game, you choose which die to stake. TELL -- it shows its die, you choose which game to hold it in. ponytail: the two blind orders (commit first, learn after) are deliberately not here yet -- they are only a bet once the player knows which die suits which contest.
+enum { OPEN, TELL }
+
+## Foe dice, as face lists. Not capped to the board: a foe never has to travel, so an oversized face costs it nothing, and it is exactly what makes its die a bad prize.
+static var FOE_DICE: Array[PackedInt32Array] = [
+	PackedInt32Array([1, 2, 3]),
+	PackedInt32Array([1, 2, 3, 4, 5]),
+	PackedInt32Array([1, 1, 5, 5]),
+	PackedInt32Array([3, 3, 3]),
+	PackedInt32Array([2, 2, 4, 6]),
+	PackedInt32Array([1, 3, 5, 5]),
+]
+
+## What a boss brings. Bigger and stranger than anything on the floor, because it is the one fight you cannot walk around.
+static var BOSS_DICE: Array[PackedInt32Array] = [
+	PackedInt32Array([2, 4, 6, 6]),
+	PackedInt32Array([1, 1, 6, 6]),
+	PackedInt32Array([4, 4, 4, 4]),
+]
+
+
+## A foe as plain data: its die, the contests it knows, and how much it tells you. A Dictionary rather than a class for the same reason `links` is one -- it is data the turn loop passes around, and nothing about it needs behaviour of its own.
+static func make_foe(rng: RandomNumberGenerator, boss := false) -> Dictionary:
+	var pool := BOSS_DICE if boss else FOE_DICE
+	var games: Array[int] = [0, 1, 2]
+	if not boss:
+		# A floor foe knows two of the three, so which contest it can reach for is part of what you read off it.
+		games.shuffle()
+		games = games.slice(0, 2)
+	return {
+		"faces": pool[rng.randi_range(0, pool.size() - 1)],
+		"games": games,
+		# A boss always names the contest: the last thing it hands you is the choice of which die to lose.
+		"trait": OPEN if boss or rng.randi() % 2 == 0 else TELL,
+		"boss": boss,
+	}

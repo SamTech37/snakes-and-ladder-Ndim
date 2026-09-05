@@ -31,6 +31,8 @@ const HIT_PX := 34.0
 @onready var cam: Camera3D = get_parent()
 @onready var dice: Array[Node3D] = [$Die0, $Die1]
 @onready var spares: Node3D = $Spares
+## The foe's die, on the opposite corner of the frame, facing the kit. A fight is two dice looking at each other -- the same thing the tray already is, mirrored.
+@onready var foe: MeshInstance3D = $Foe
 
 var picked := 0
 var spare_count := 0
@@ -72,10 +74,11 @@ func _layout() -> void:
 	var half_h := tan(deg_to_rad(cam.fov) * 0.5) * DEPTH
 	var half_w := half_h * get_viewport().get_visible_rect().size.aspect()
 	position = Vector3(-half_w + 0.42, -half_h + 0.32, -DEPTH)
+	# Mirrored across the frame from the tray's own corner, so the two sides of a fight sit as far apart as the screen allows.
+	foe.position.x = 2.0 * (half_w - 0.42)
 
 
-## Shows the kit. A board with one die shows one die. Each entry is a die's list of
-## face values, so the silhouette counts its *sides* and the label spells the faces.
+## Shows the kit. A board with one die shows one die. Each entry is a die's list of face values, so the silhouette counts its *sides* and the label spells the faces.
 func set_kit(kit: Array[PackedInt32Array], sel: int) -> void:
 	picked = sel
 	for i in dice.size():
@@ -117,11 +120,34 @@ func flash_spares() -> void:
 		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 
+## Puts the foe's die on the far side of the frame. Its faces are spelled out, because a foe die is rarely plain 1..n and the number of sides alone would be a lie about it.
+func set_foe(faces: PackedInt32Array) -> void:
+	foe.visible = true
+	foe.mesh = _bipyramid(faces.size(), 0.11, 0.16)
+	foe.material_override = _mat(Pal.C_FOE)
+	var face: Label3D = foe.get_node("Face")
+	face.text = Rules.die_name(faces)
+	face.modulate = Pal.C_FOE
+	face.visible = true
+
+
+func clear_foe() -> void:
+	foe.visible = false
+
+
+## The foe throws the same way you do. Same tumble, so neither side's roll reads as more authored than the other's.
+func roll_foe(n: int) -> void:
+	_throw(foe, n)
+
+
 ## The die turns over and comes up on a number. The result belongs on the die that was
 ## thrown, not floating over the player -- a number landing on the player's head reads
 ## as something being done *to* them.
 func roll_to(n: int) -> void:
-	var d: Node3D = dice[picked]
+	_throw(dice[picked], n)
+
+
+func _throw(d: Node3D, n: int) -> void:
 	var face: Label3D = d.get_node("Face")
 	if not anim:
 		face.text = str(n)

@@ -239,3 +239,23 @@ static func gen_links(size: PackedInt32Array, count: int, rng: RandomNumberGener
 		used[b] = true
 	return links
 
+
+## Cells to stand a foe on. Never the start, never the goal -- the goal is the boss's -- and never either end of a link, because a cell already carrying a teleport has something to say when you land on it and two of those would fight for the marker.
+static func gen_foes(size: PackedInt32Array, count: int, rng: RandomNumberGenerator,
+		links: Dictionary) -> PackedInt32Array:
+	var n := total_cells(size)
+	var taken := {0: true, n - 1: true}
+	for a in links:
+		taken[a] = true
+		taken[links[a]] = true
+	var out := PackedInt32Array()
+	var attempts := 0
+	while out.size() < count and attempts < count * 500:
+		attempts += 1
+		var c := rng.randi_range(0, n - 1)
+		if taken.has(c):
+			continue
+		taken[c] = true
+		out.append(c)
+	return out
+

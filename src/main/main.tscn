@@ -117,6 +117,18 @@ font = SubResource("Font_mono")
 font_size = 96
 text = "d3"
 
+[node name="Foe" type="MeshInstance3D" parent="CamRig/Camera3D/Tray"]
+visible = false
+
+[node name="Face" type="Label3D" parent="CamRig/Camera3D/Tray/Foe"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.235, 0)
+pixel_size = 0.00075
+billboard = 1
+no_depth_test = true
+font = SubResource("Font_mono")
+font_size = 96
+text = "d6"
+
 [node name="Spares" type="Node3D" parent="CamRig/Camera3D/Tray"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.62, 0, 0)
 

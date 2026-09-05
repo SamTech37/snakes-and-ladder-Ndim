@@ -1,4 +1,4 @@
-[gd_scene load_steps=7 format=3]
+[gd_scene load_steps=8 format=3]
 
 [sub_resource type="SystemFont" id="Font_mono"]
 font_names = PackedStringArray("JetBrains Mono", "DejaVu Sans Mono", "Liberation Mono", "monospace")
@@ -35,6 +35,11 @@ height = 0.52
 radial_segments = 4
 rings = 2
 
+[sub_resource type="PrismMesh" id="Mesh_foe"]
+material = SubResource("Mat_ghost")
+left_to_right = 0.5
+size = Vector3(0.42, 0.42, 0.42)
+
 [node name="Ghost" type="Node3D"]
 
 [node name="Plain" type="MeshInstance3D" parent="."]
@@ -52,6 +57,10 @@ mesh = SubResource("Mesh_down")
 [node name="Goal" type="MeshInstance3D" parent="."]
 visible = false
 mesh = SubResource("Mesh_goal")
+
+[node name="Foe" type="MeshInstance3D" parent="."]
+visible = false
+mesh = SubResource("Mesh_foe")
 
 [node name="Number" type="Label3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.4, 0)

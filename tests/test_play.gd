@@ -36,6 +36,9 @@ func _initialize() -> void:
 		var m = load("res://src/main/main.tscn").instantiate()
 		m.size = size
 		m.anim = false
+		# No foes and no boss here on purpose: this is the liveness check that a random walk still crosses the lattice, and a fight can end the run before it does. Fights are driven deterministically in tests/test_fight.gd instead.
+		m.foe_count = 0
+		m.boss_fight = false
 		root.add_child(m)
 		await process_frame
 

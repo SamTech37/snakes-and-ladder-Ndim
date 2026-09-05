@@ -9,6 +9,7 @@ extends CanvasLayer
 
 const Board = preload("res://src/board/board.gd")
 const Rules = preload("res://src/game/rules.gd")
+const MG = preload("res://src/game/minigames.gd")
 
 @onready var status: Label = $Margin/Rows/Status
 @onready var help: VBoxContainer = $Margin/Rows/Help
@@ -29,8 +30,14 @@ func refresh(s: Dictionary) -> void:
 
 
 func _status(s: Dictionary) -> void:
+	if s["dead"]:
+		status.text = "RUN OVER  -  no dice left  -  SHIFT+R restart"
+		return
 	if s["won"]:
 		status.text = "WIN in %d turns  -  SHIFT+R restart" % s["turns"]
+		return
+	if not s["fight"].is_empty():
+		status.text = _fight(s["fight"])
 		return
 	var here := "(%s)" % ", ".join(Array(s["coords"]).map(func(v): return str(v)))
 	# The die, the roll and the spares are all objects on the tray now, so the line
@@ -44,13 +51,33 @@ func _status(s: Dictionary) -> void:
 	status.text = "%s  -  pick a marker" % here
 
 
+## The one line a fight needs: who is across the table, what is being contested, and which half of the choice is yours. The dice themselves are on the tray -- yours in the near corner, the foe's in the far one -- so this says nothing they already show.
+func _fight(f: Dictionary) -> String:
+	if f["discard"]:
+		return "KIT FULL  -  press a number to drop a die"
+	var foe: Dictionary = f["foe"]
+	var head := "BOSS %d-%d" % [f["wins"], f["losses"]] if foe["boss"] else "FOE"
+	var last: String = "  -  %s" % f["last"] if not f["last"].is_empty() else ""
+	if f["game"] < 0:
+		# TELL: its die is on the table and the contest is yours to name.
+		var parts := PackedStringArray()
+		var i := 1
+		for g in foe["games"]:
+			if not f["used"].has(g):
+				parts.append("[%d] %s" % [i, MG.ALL[g].label()])
+				i += 1
+		return "%s  -  pick the contest  %s%s" % [head, "  ".join(parts), last]
+	return "%s  -  %s  -  SPACE stakes the die you picked%s" \
+			% [head, MG.ALL[f["game"]].label(), last]
+
+
 func _moves(s: Dictionary) -> String:
 	var moves: Array = s["moves"]
 	if moves.is_empty():
 		return "no move on the board"
 	var lines := PackedStringArray()
 	for i in moves.size():
-		lines.append("%d)  %s" % [i + 1, _move_label(moves[i], s["size"], s["links"])])
+		lines.append("%d)  %s" % [i + 1, _move_label(moves[i], s["size"], s["links"], s["foes"])])
 	return "\n".join(lines)
 
 
@@ -64,11 +91,11 @@ func _kit(s: Dictionary) -> String:
 	return "die  " + "  ".join(parts)
 
 
-func _move_label(m: Dictionary, size: PackedInt32Array, links: Dictionary) -> String:
+func _move_label(m: Dictionary, size: PackedInt32Array, links: Dictionary, foes: Dictionary) -> String:
 	var sign_char := "+" if m["dir"] > 0 else "-"
 	var axis: int = m["axis"]
 	var axis_name := Board.AXIS_NAMES[axis] if axis < Board.AXIS_NAMES.length() else str(axis)
-	var kind := Rules.landing(m["coords"], size, links)
+	var kind := Rules.landing(m["coords"], size, links, foes)
 	return "%s%s -> (%s)%s" % [sign_char, axis_name,
 			", ".join(Array(m["coords"]).map(func(v): return str(v))),
 			"" if kind.is_empty() else "  " + kind]
