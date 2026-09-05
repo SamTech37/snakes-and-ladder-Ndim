@@ -79,7 +79,9 @@ SNL_SEED=7 DISPLAY=:0 godot --position -6000,-6000 --script tests/shot.gd -- sho
 
 `shot.gd` args: output path, size, spread (`0` stacked / `1` exploded), `roll`, and an optional `yaw,pitch`. Screenshots go to `shots/`, which is gitignored.
 
-Controls: `SPACE` roll, number keys pick a move, `TAB` switch SPREAD/FOCUS, `D` cycle board dimensions, `C` recentre the camera, `F3` debug view, `R` restart, drag to orbit, wheel to zoom.
+Controls: `SPACE` roll, number keys pick a move, `TAB` switch SPREAD/FOCUS, `D` cycle board dimensions, `C` recentre the camera, `F3` debug view, `R` restart, drag to orbit, right-drag to pan, wheel to zoom.
+
+Pan exists because the fit frames the whole board: zoomed in on a big lattice there is otherwise no way to reach the corner being played in. It is an offset on top of the fitted pivot, so a refit keeps it; `C` flies it back to zero along with the orbit.
 
 `D` walks `Main.SIZES` — `[6,6,6]` → `[4,4,4,4]` → `[3,3,3,3,3]`. The higher-dimensional boards have to be reachable from inside the game, not only by editing an export.
 

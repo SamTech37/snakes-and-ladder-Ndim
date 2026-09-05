@@ -6,6 +6,7 @@ extends SceneTree
 ## Run: godot --headless --script tests/test_play.gd
 
 const Board = preload("res://src/board/board.gd")
+const Pal = preload("res://src/palette.gd")
 const TURN_CAP := 2000
 
 func _initialize() -> void:
@@ -20,6 +21,19 @@ func _initialize() -> void:
 		while not m.won and turns < TURN_CAP:
 			turns += 1
 			m.do_roll()
+			# Every marker is tinted by what it lands on -- untinted, the numbers say
+			# nothing about which move is a snake.
+			for i in m.moves.size():
+				var idx := Board.coords_to_index(m.moves[i]["coords"], size)
+				var want: Color = Pal.C_MOVE
+				if idx == Board.total_cells(size) - 1:
+					want = Pal.C_GOAL
+				elif m.links.has(idx):
+					var to := Board.index_to_coords(m.links[idx], size)
+					var up := Board.dist_to_goal(to, size) < Board.dist_to_goal(m.moves[i]["coords"], size)
+					want = Pal.C_LADDER if up else Pal.C_SNAKE
+				assert(m.ghosts.get_child(i).material_override.albedo_color == want,
+						"move %d marker is not tinted for what it lands on" % (i + 1))
 			if not m.moves.is_empty():
 				m.choose(randi() % m.moves.size())
 			await process_frame

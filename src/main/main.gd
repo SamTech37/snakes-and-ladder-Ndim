@@ -6,36 +6,10 @@ extends Node3D
 ## depends on `size`), the turn loop, and input.
 
 const Board = preload("res://src/board/board.gd")
+## Every color comes from here. Don't write a Color() literal in this file.
+const Pal = preload("res://src/palette.gd")
 const AXIS_NAMES := "XYZWVU"
 const LABEL_FONT = preload("res://src/main/mono.tres")
-
-## Flat color, nothing over 1.0. The environment does no glow and no filmic tonemap,
-## so what is written here is what lands on screen; separation comes from brightness
-## against black, the way it does in every one of the reference plates. The board is
-## a dim violet -> teal gradient that reads as one receding surface, and anything
-## playable sits near full brightness on top of it.
-const C_SHELL_START := Color(0.26, 0.10, 0.38)
-const C_SHELL_GOAL := Color(0.09, 0.34, 0.40)
-const C_FRAME := Color(0.17, 0.17, 0.26)
-## Warm, so the plane you are standing on never reads as another board line.
-const C_HERE := Color(0.78, 0.46, 0.13)
-const C_LADDER := Color(0.49, 1.0, 0.31)
-const C_SNAKE := Color(1.0, 0.24, 0.60)
-const C_GOAL := Color(1.0, 0.89, 0.25)
-
-## Debug gizmo, one per lattice axis in AXIS_NAMES order: X Y Z W V U.
-const C_AXIS := [
-	Color(1.0, 0.28, 0.28),
-	Color(0.35, 1.0, 0.35),
-	Color(0.40, 0.58, 1.0),
-	Color(1.0, 0.85, 0.20),
-	Color(1.0, 0.40, 1.0),
-	Color(0.35, 1.0, 1.0),
-]
-## Camera rotation rings, labelled in the world rather than printed as numbers.
-const C_YAW := Color(1.0, 0.55, 0.15)
-const C_PITCH := Color(0.70, 0.45, 1.0)
-const C_ROLL := Color(0.85, 0.85, 0.85)
 
 ## What a plane that is neither yours nor a destination drops to. Dimmed, not hidden:
 ## the stack has to stay visible or FOCUS stops being a view of the board.
@@ -124,6 +98,16 @@ var zoom := 20.0
 var half_depth := 0.0
 var dragging := false
 
+## Right-drag offset, in the camera's own screen plane and in world units. The fit
+## frames the whole board, so on a big lattice zoomed in there is no way to reach the
+## corner you are playing in without it. Added on top of the fitted pivot rather than
+## replacing it, so it survives a refit; C clears it.
+var panning := false
+var pan := Vector2.ZERO
+
+## Marker materials by color, built on demand. See _ghost_mat().
+var ghost_mats := {}
+
 
 func _ready() -> void:
 	# SNL_SEED pins the board so two runs render the same thing — without it a
@@ -144,6 +128,7 @@ func new_game() -> void:
 	moves = []
 	won = false
 	busy = false
+	pan = Vector2.ZERO
 	player.position = _world(coords)
 	_draw_board()
 	_frame_camera()
@@ -190,9 +175,9 @@ func _draw_board() -> void:
 			_seg(im, _world(c), _shell_color(c, span) * f, _world(d), _shell_color(d, span) * f)
 
 	for p in Board.plane_count(size):
-		_plane_frame(im, p, (C_HERE if p == here else C_FRAME) * _fade(p, lit))
+		_plane_frame(im, p, (Pal.C_HERE if p == here else Pal.C_FRAME) * _fade(p, lit))
 
-	_star(im, _world(Board.goal_coords(size)), 0.45, C_GOAL)
+	_star(im, _world(Board.goal_coords(size)), 0.45, Pal.C_GOAL)
 	if debug:
 		_draw_axes(im)
 	else:
@@ -218,7 +203,7 @@ func _draw_axes(im: ImmediateMesh) -> void:
 		if step.length() < 0.001:
 			continue
 		var dir := step.normalized()
-		var color: Color = C_AXIS[k % C_AXIS.size()]
+		var color: Color = Pal.C_AXIS[k % Pal.C_AXIS.size()]
 		var tip := origin + dir * 3.5
 		_line(im, origin, tip, color)
 		# Barbs, so the arrow still reads when the axis points at the camera.
@@ -235,9 +220,9 @@ func _draw_axes(im: ImmediateMesh) -> void:
 	# orientation is something you look at rather than read. Sized off the board, not
 	# the zoom: rings scaled to the viewport swallowed everything behind them.
 	var b := cam.global_transform.basis
-	_ring(im, origin, Vector3.RIGHT, Vector3.BACK, 2.6, C_YAW, "YAW", 0.0)
-	_ring(im, origin, b.y, -b.z, 2.2, C_PITCH, "PITCH", -0.9)
-	_ring(im, origin, b.x, b.y, 1.8, C_ROLL, "ROLL", 0.9)
+	_ring(im, origin, Vector3.RIGHT, Vector3.BACK, 2.6, Pal.C_YAW, "YAW", 0.0)
+	_ring(im, origin, b.y, -b.z, 2.2, Pal.C_PITCH, "PITCH", -0.9)
+	_ring(im, origin, b.x, b.y, 1.8, Pal.C_ROLL, "ROLL", 0.9)
 
 
 ## Circle spanned by `u` and `v`, labelled at the point furthest to screen-right and
@@ -299,7 +284,7 @@ func _draw_links(lit: Dictionary) -> void:
 		var cb := Board.index_to_coords(links[a], size)
 		var up := Board.dist_to_goal(cb, size) < Board.dist_to_goal(ca, size)
 		var f := maxf(_fade(Board.plane_of(ca, size), lit), _fade(Board.plane_of(cb, size), lit))
-		var color := (C_LADDER if up else C_SNAKE) * f
+		var color := (Pal.C_LADDER if up else Pal.C_SNAKE) * f
 		var wa := _world(ca)
 		var wb := _world(cb)
 		var head := minf(HEAD_LEN, wa.distance_to(wb) * 0.5)
@@ -339,7 +324,7 @@ func _fade(p: int, lit: Dictionary) -> float:
 
 ## Violet at the start corner, teal at the goal: the gradient doubles as the progress bar.
 func _shell_color(c: PackedInt32Array, span: int) -> Color:
-	return C_SHELL_START.lerp(C_SHELL_GOAL, 1.0 - float(Board.dist_to_goal(c, size)) / span)
+	return Pal.C_SHELL_START.lerp(Pal.C_SHELL_GOAL, 1.0 - float(Board.dist_to_goal(c, size)) / span)
 
 
 ## Outline around one plane, drawn through the projection so it tilts and slides with
@@ -420,7 +405,7 @@ func _frame_camera() -> void:
 	zoom = maxf(extent.y / maxf(0.4, (vp.y - bar) / vp.y), extent.x / vp.aspect())
 	# Raising the pivot drops the board down the screen, clear of the HUD bar.
 	var mid := (lo + hi) * 0.5
-	rig.position = basis * Vector3(mid.x, mid.y + bar / vp.y * zoom * 0.5, mid.z)
+	rig.position = basis * Vector3(mid.x + pan.x, mid.y + bar / vp.y * zoom * 0.5 + pan.y, mid.z)
 	half_depth = extent.z * 0.5
 	cam.position = Vector3(0.0, 0.0, _cam_dist())
 
@@ -492,11 +477,15 @@ func _tween_angle(to: Vector2, secs := 0.45) -> void:
 	yaw = to.x + wrapf(yaw - to.x, -PI, PI)
 	pitch = to.y + wrapf(pitch - to.y, -PI, PI)
 	var from := Vector2(yaw, pitch)
+	# C recentres, so it undoes the pan as well as the orbit -- and flies it back
+	# rather than snapping the board across the screen.
+	var from_pan := pan
 	var t := create_tween()
 	t.tween_method(func(u: float):
 			var a := from.lerp(to, u)
 			yaw = a.x
 			pitch = a.y
+			pan = from_pan.lerp(Vector2.ZERO, u)
 			_frame_camera()
 			if debug:
 				_draw_board(), 0.0, 1.0, secs) \
@@ -534,14 +523,57 @@ func _clear_ghosts() -> void:
 
 
 ## One numbered marker per legal move. Numbers, not mouse picking, because
-## numbers keep working when 5D offers ten directions.
+## numbers keep working when 5D offers ten directions. Each marker is tinted with
+## what it lands on, so the choice can be read off the board instead of only off the
+## HUD list.
 func _show_ghosts() -> void:
 	_clear_ghosts()
 	for i in moves.size():
 		var g := ghost_scene.instantiate()
 		g.get_node("Number").text = str(i + 1)
+		var c := _landing_color(_landing(moves[i]))
+		# The mesh and its material are sub-resources of ghost.tscn and every instance
+		# shares them, so the tint has to be an override rather than a write.
+		g.material_override = _ghost_mat(c)
+		g.get_node("Number").modulate = c
 		ghosts.add_child(g)
 	_place_ghosts()
+
+
+## One material per landing color, made once and shared by every marker using it.
+func _ghost_mat(c: Color) -> StandardMaterial3D:
+	if not ghost_mats.has(c):
+		var m := StandardMaterial3D.new()
+		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		m.albedo_color = c
+		ghost_mats[c] = m
+	return ghost_mats[c]
+
+
+## What a move lands on: "" for plain floor. Both the marker's color and the word in
+## the HUD list come from this, so the two cannot drift apart.
+## ponytail: events and foes are not designed yet -- add their case here, and their
+## color to the palette, when they exist.
+func _landing(m: Dictionary) -> String:
+	var idx := Board.coords_to_index(m["coords"], size)
+	if idx == Board.total_cells(size) - 1:
+		return "GOAL"
+	if not links.has(idx):
+		return ""
+	var to := Board.index_to_coords(links[idx], size)
+	var up := Board.dist_to_goal(to, size) < Board.dist_to_goal(m["coords"], size)
+	return "LADDER" if up else "SNAKE"
+
+
+func _landing_color(kind: String) -> Color:
+	match kind:
+		"GOAL":
+			return Pal.C_GOAL
+		"LADDER":
+			return Pal.C_LADDER
+		"SNAKE":
+			return Pal.C_SNAKE
+	return Pal.C_MOVE
 
 
 ## Markers follow the layout while the stack explodes, instead of hanging where the
@@ -556,7 +588,10 @@ func _move_label(m: Dictionary) -> String:
 	var sign_char := "+" if m["dir"] > 0 else "-"
 	var axis: int = m["axis"]
 	var axis_name := AXIS_NAMES[axis] if axis < AXIS_NAMES.length() else str(axis)
-	return "%s%s -> (%s)" % [sign_char, axis_name, ", ".join(Array(m["coords"]).map(func(v): return str(v)))]
+	var kind := _landing(m)
+	return "%s%s -> (%s)%s" % [sign_char, axis_name,
+			", ".join(Array(m["coords"]).map(func(v): return str(v))),
+			"" if kind.is_empty() else "  " + kind]
 
 
 func _refresh_hud() -> void:
@@ -568,7 +603,7 @@ func _refresh_hud() -> void:
 	var mode := "SPREAD" if view == View.SPREAD else "FOCUS"
 	if roll == 0:
 		status.text = "at %s  -  turn %d  -  SPACE to roll d%d" % [here, turns, die_faces()]
-		menu.text = "%dD board %s  -  %d planes  -  %s view  -  TAB view, D dimensions, C recentre, F3 debug, R restart  -  drag to orbit, wheel to zoom" \
+		menu.text = "%dD board %s  -  %d planes  -  %s view  -  TAB view, D dimensions, C recentre, F3 debug, R restart  -  drag to orbit, right-drag to pan, wheel to zoom" \
 				% [size.size(), str(size), Board.plane_count(size), mode]
 		return
 	status.text = "rolled %d  -  at %s  -  turn %d" % [roll, here, turns]
@@ -663,6 +698,8 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton:
 		if event.button_index == MOUSE_BUTTON_LEFT:
 			dragging = event.pressed
+		elif event.button_index == MOUSE_BUTTON_RIGHT:
+			panning = event.pressed
 		elif event.button_index == MOUSE_BUTTON_WHEEL_UP and event.pressed:
 			_set_zoom(zoom * 0.9)
 		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN and event.pressed:
@@ -679,6 +716,15 @@ func _unhandled_input(event: InputEvent) -> void:
 		# rebuilt as it turns. Only while the gizmo is up.
 		if debug:
 			_draw_board()
+	elif event is InputEventMouseMotion and panning:
+		# The board follows the cursor. Scaled by the framed world height per pixel, so
+		# a drag moves the same distance under the cursor at every zoom. Applied to the
+		# rig directly rather than through _frame_camera(), which refits and would throw
+		# away the wheel zoom on every mouse move.
+		var k := zoom / get_viewport().get_visible_rect().size.y
+		var d := Vector2(-event.relative.x * k, event.relative.y * k)
+		pan += d
+		rig.position += rig.global_transform.basis * Vector3(d.x, d.y, 0.0)
 	elif event is InputEventKey and event.pressed and not event.echo:
 		# ponytail: R, TAB and the number keys read raw keycodes rather than adding
 		# input actions to project.godot. "roll" reuses the built-in ui_accept.
