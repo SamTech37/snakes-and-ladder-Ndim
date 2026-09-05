@@ -160,16 +160,44 @@ func _boss() -> void:
 	b.free()
 
 
-## The run ends when the last die is gone -- that is the only way to lose.
+## Your last die cannot be taken, only broken. A run that starts on one die has to survive its first lost fight, or the game is one coin flip long.
 func _run_over() -> void:
 	var m: Node3D = await _game()
-	m.kit = _kit([PackedInt32Array([1, 1])])
+	m.kit = _kit([PackedInt32Array([1, 2, 3, 4, 5])])
 	m.die_index = 0
-	m._start_fight(_foe(PackedInt32Array([6, 6]), [0], Rules.OPEN), 0)
-	m._resolve()
-	assert(m.kit.is_empty() and m.dead, "an empty kit did not end the run")
+	# Ones against sixes at BIGGER: every one of these is a loss.
+	var losses := 0
+	while not m.dead and losses < 10:
+		losses += 1
+		m._start_fight(_foe(PackedInt32Array([6, 6]), [0], Rules.TELL), 0)
+		m.fight["game"] = 0
+		m._resolve()
+		if not m.dead:
+			assert(m.kit.size() == 1, "the last die was taken instead of broken")
+			# A d5 wears down to [1,2,3,4], then [1,2,3], then [1,2]: the largest face goes each time, so the die gets safer to travel with and worse to fight with.
+			var want := PackedInt32Array()
+			for v in range(1, 6 - losses):
+				want.append(v)
+			assert(m.kit[0] == want, "a broken die came out %s, not %s"
+					% [str(m.kit[0]), str(want)])
+	assert(losses == 4, "a d5 should survive three lost fights and go on the fourth, not %d" % losses)
+	assert(m.kit.is_empty() and m.dead, "a shattered last die did not end the run")
 	assert(m.fight.is_empty(), "the fight outlived the run")
+
+	# Holding more than one, the staked die is still taken outright.
+	var k: Node3D = await _game()
+	k.kit = _kit([PackedInt32Array([1, 2, 3]), PackedInt32Array([1, 2, 3])])
+	k.die_index = 0
+	k._start_fight(_foe(PackedInt32Array([6, 6]), [0], Rules.OPEN), 0)
+	k._resolve()
+	assert(k.kit.size() == 1 and not k.dead, "a lost fight with a spare die should take the die whole")
+	assert(k.kit[0].size() == 3, "a die was broken while another was in hand")
+
+	# And a fight always contains a decision: down to one die there is nothing to choose between, so the foe shows its die and the contest becomes yours to name.
+	k._start_fight(_foe(PackedInt32Array([6, 6]), [0, 1], Rules.OPEN), 0)
+	assert(k.fight["game"] < 0, "an OPEN foe left no decision at all to a player holding one die")
 	done["run_over"] = true
+	k.free()
 	m.free()
 
 

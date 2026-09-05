@@ -200,6 +200,10 @@ The game is a run now: **the floor number and the dimension count are the same n
 
 **Fights are one contest, one roll each** — a beat inside the turn, not a mode you leave the board for. The boss takes two of three. **The die you commit is the die you stake:** lose and the foe takes that one, so the question is never only which die wins, but which die you can afford to lose. Win and its die is offered; over the cap, taking one means dropping one.
 
+**Your last die cannot be taken, only broken.** A run sets out on one die, so a foe that could take it would end the game on a coin flip before the second roll. Holding one, a loss drops that die's *largest* face (`Rules.damaged()`) — it gets safer to travel with and worse to fight with as it wears down, and the bipyramid on the tray visibly loses a side. A die already at `MIN_FACES` is lost outright, and that is the end of the run. A d5 therefore survives three lost fights and goes on the fourth.
+
+**Every fight has to contain a decision.** An `OPEN` foe names the contest and leaves you the choice of which die to stake — which is no choice at all while you are holding one. Down to a single die, `_next_round()` treats it as `TELL` instead: the foe shows its die and the naming comes to you.
+
 `src/game/minigames.gd` holds the contests behind one interface — BIGGER (比大), SMALLER (比小), EVEN SUM (奇偶) — so 對子 or 吹牛 is a class and an entry in `ALL`. **Ties go to the foe.** `favours()` is the single place that says which die suits which contest, so the foe's own choice and any hint the HUD grows cannot disagree.
 
 A foe carries a **commit order**, which is the 分蛋糕 split — one side frames, the other chooses inside it. `OPEN` names the contest and leaves you the die; `TELL` shows its die and leaves you the contest. The two blind orders (commit first, learn after) are deliberately not built: they are only a bet once the player knows which die suits which contest.
@@ -210,9 +214,11 @@ A foe carries a **commit order**, which is the 分蛋糕 split — one side fram
 
 **Losing the boss is not a wall.** You are still standing on the goal, so it comes straight back and each attempt costs a die. That is how a weak kit bleeds out instead of being locked out of the game with nothing left to do — and it is why sprinting past every optional fight is not free.
 
+**Picking a die inspects it.** A won die is `[1,1,5,5]` or `[2,2,4,6]`, and four digits on the tray say what the faces are but not what they are worth. `_inspect()` prints the faces and what each contest makes of them, straight out of `favours()`, so it cannot drift from what the dice actually do.
+
 **A fight has to announce itself three ways.** A sting, the music swapping to the fight loop (`Audio.set_music()`, ducked rather than cut), and a ring thrown at the cell it happens on. Each round plays an opposite sound and an opposite-coloured ring, and the whole status line turns `C_FOE` for as long as the fight lasts. When it ends, `notice` carries what it cost or paid until the next roll — a fight that ends in silence leaves you looking at a tray with one fewer die on it and no idea why.
 
-The contest you are about to commit to is **shouted and bracketed** (`> SMALLER <`) while the rest go quiet and lowercase. A `Label` cannot colour one word of itself, and swapping it for a `RichTextLabel` to highlight three words is not worth the node.
+The contest you are about to commit to is **reversed out** — dark ink on a full-brightness swatch (`hud.gd:_hi()`), the way a selection has looked since terminals had one. `Status` is a `RichTextLabel` for exactly this: a `Label` can only colour the whole of itself, and capitals are not a highlight, they are shouting.
 
 `carry_tokens` is a **playtest flag**: on, reroll tokens bank across floors, which may well trivialise every later endgame. That is the thing to watch, so it is a switch rather than a decision made in advance.
 

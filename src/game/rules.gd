@@ -119,6 +119,22 @@ static func floor_size(d: int) -> PackedInt32Array:
 	return out
 
 
+## The fewest faces a die can be ground down to. Below this it is gone: a two-face die is already a coin, and a one-face die makes a forward move legal from every cell but the goal, which deletes the endgame.
+const MIN_FACES := 2
+
+
+## Your last die cannot be taken, only broken: it loses its largest face. That is what stops a single coin flip from ending a run on the first foe — with one die in hand, losing costs you reach rather than everything, and the silhouette on the tray loses a side so you can watch it happening.
+## The largest face, because that is the one worth most in BIGGER and the one that overshoots the far wall: the die gets safer to travel with and worse to fight with as it wears down.
+static func damaged(faces: PackedInt32Array) -> PackedInt32Array:
+	var out := faces.duplicate()
+	var worst := 0
+	for i in out.size():
+		if out[i] >= out[worst]:
+			worst = i
+	out.remove_at(worst)
+	return out
+
+
 ## What you set out with: one die. Room to carry more is what ascending buys, so floor one is about using what you have rather than choosing between things.
 ## The smallest die, and that is measured rather than chosen by taste: alone on the opening board a d3 costs 11.61 rolls against a d6's 13.82, and on [6,6,6] a d3 costs 10.62 against a d5's 13.38. Big faces are dead weight against the far wall, and a lone die has nothing to hide behind. tests/odds.gd prints both columns and asserts this one is the cheaper.
 static func start_kit(size: PackedInt32Array) -> Array[PackedInt32Array]:

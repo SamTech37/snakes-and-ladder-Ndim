@@ -10,7 +10,20 @@ const Rules = preload("res://src/game/rules.gd")
 const Pal = preload("res://src/palette.gd")
 const TURN_CAP := 2000
 
+## A failed `assert` does not stop a `--script` run: it abandons the function it is in and hands control back, so the checks live in their own function and sign off at the end. Without the signature the run exits 1 instead of looking clean.
+var done := false
+
+
 func _initialize() -> void:
+	await _checks()
+	if not done:
+		push_error("a check above failed")
+		quit(1)
+		return
+	quit()
+
+
+func _checks() -> void:
 	# The sound bank is arithmetic, so it can come out silent without erroring
 	# anywhere. Headless has no audio device to hear it on -- check the samples.
 	#
@@ -98,4 +111,4 @@ func _initialize() -> void:
 		print("%s won in %d random turns" % [str(size), turns])
 		m.free()
 
-	quit()
+	done = true

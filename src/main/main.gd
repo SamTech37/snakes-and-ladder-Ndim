@@ -146,9 +146,10 @@ func new_game(keep := false) -> void:
 	die_index = mini(die_index, kit.size() - 1)
 	# The chaser scales by its dice rather than its speed: a two-step chaser cannot be anticipated in a projected 4D view, and a clock you cannot read is an ambush rather than pressure.
 	roamer_foe = Rules.make_foe(rng, false, size.size() >= 4)
-	_reset_roamer()
 	rig.pan = Vector2.ZERO
+	# Before anything is placed. Every cell is handed to the projection as coordinates, and coordinates for this board read against the last one are out of bounds on the axis this board just grew.
 	view3d.size = size
+	_reset_roamer()
 	player.position = view3d.world(coords)
 	ghosts.clear()
 	_redraw()
@@ -168,8 +169,9 @@ func _ascend() -> void:
 
 ## Board and markers follow the game state; called whenever either changes.
 func _redraw() -> void:
-	view3d.sync(coords, links, moves, foes)
+	# The chaser first: sync() draws, and drawing reads whatever chaser cell it was last handed.
 	view3d.set_roamer(roamer, _roamer_next())
+	view3d.sync(coords, links, moves, foes)
 
 
 func _refresh_hud() -> void:
@@ -377,8 +379,22 @@ func _pick_die(i: int) -> void:
 		return
 	die_index = i
 	Audio.play("pick")
+	_inspect(i)
 	_refresh_tray()
 	_refresh_hud()
+
+
+## Picking a die says what it is. A won die can be [1,1,5,5] or [2,2,4,6], and its name on the tray is four digits: that tells you the faces but not what they are worth, and a die you cannot read is a die you cannot choose with.
+##
+## The percentages come from the contests themselves (`favours()`), so this cannot drift from what the dice actually do in a fight.
+func _inspect(i: int) -> void:
+	var faces: PackedInt32Array = kit[i]
+	var parts := PackedStringArray()
+	for g in MG.ALL:
+		parts.append("%s %d%%" % [g.label().to_lower(), roundi(g.favours(faces) * 100.0)])
+	notice = "%s  faces %s  -  %s" \
+			% [Rules.die_name(faces), " ".join(Array(faces).map(func(v): return str(v))),
+			"  ".join(parts)]
 
 
 ## A click that did not drag. The tray is the only thing worth clicking: a die picks
@@ -464,7 +480,9 @@ func _start_fight(foe: Dictionary, cell: int) -> void:
 ## Who frames the contest and who chooses inside it -- the 分蛋糕 split. OPEN, the foe names the game and the choice left to you is which die to stake; TELL, its die is already on the table and the choice is which contest to hold it in.
 func _next_round() -> void:
 	var foe: Dictionary = fight["foe"]
-	fight["game"] = _foe_picks(foe) if foe["trait"] == Rules.OPEN else -1
+	# A foe that names the contest leaves you the choice of which die to stake -- which is no choice at all while you are holding one. Down to a single die the foe shows its die instead and the naming comes to you, so every fight has a decision in it even at the bottom.
+	var order: int = foe["trait"] if kit.size() > 1 else Rules.TELL
+	fight["game"] = _foe_picks(foe) if order == Rules.OPEN else -1
 	fight["pick"] = 0
 	_refresh_hud()
 
@@ -548,9 +566,8 @@ func _fight_won() -> void:
 func _fight_lost() -> void:
 	var foe: Dictionary = fight["foe"]
 	Audio.play("snake")
-	notice = "LOST the fight  -  %s gone" % Rules.die_name(die())
 	foes.erase(fight["cell"])
-	_lose_die(die_index)
+	_pay_for_loss()
 	if dead:
 		_end_fight()
 		return
@@ -559,6 +576,24 @@ func _fight_lost() -> void:
 		_start_fight(foe, -1)
 		return
 	_end_fight()
+
+
+## What a lost fight costs. Holding more than one die, the foe takes the one you staked. Holding your last, it cannot be taken -- it breaks, losing its largest face, and only a die already worn to the minimum is lost outright.
+##
+## Without this the run is one coin flip long: you set out with one die, so the first foe you meet ends it half the time, and a game that can be over before the second roll is not a game.
+func _pay_for_loss() -> void:
+	if kit.size() > 1:
+		notice = "LOST the fight  -  %s gone" % Rules.die_name(die())
+		_lose_die(die_index)
+		return
+	var faces: PackedInt32Array = kit[0]
+	if faces.size() <= Rules.MIN_FACES:
+		notice = "LOST the fight  -  your last die shattered"
+		kit.clear()
+		dead = true
+		return
+	kit[0] = Rules.damaged(faces)
+	notice = "LOST the fight  -  your last die cracks to %s" % Rules.die_name(kit[0])
 
 
 func _lose_die(i: int) -> void:

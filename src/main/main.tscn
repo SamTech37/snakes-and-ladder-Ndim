@@ -192,12 +192,16 @@ theme_override_constants/margin_bottom = 24
 layout_mode = 2
 size_flags_vertical = 0
 
-[node name="Status" type="Label" parent="HUD/Margin/Rows"]
+[node name="Status" type="RichTextLabel" parent="HUD/Margin/Rows"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.55, 1, 0.8, 1)
-theme_override_fonts/font = SubResource("Font_mono")
+bbcode_enabled = true
+fit_content = true
+scroll_active = false
+autowrap_mode = 0
+theme_override_colors/default_color = Color(0.55, 1, 0.8, 1)
+theme_override_fonts/normal_font = SubResource("Font_mono")
 theme_override_styles/normal = SubResource("Box_hud")
-theme_override_font_sizes/font_size = 22
+theme_override_font_sizes/normal_font_size = 22
 text = "SPACE to roll"
 
 [node name="Help" type="VBoxContainer" parent="HUD/Margin/Rows"]

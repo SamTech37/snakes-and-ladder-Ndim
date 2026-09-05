@@ -27,8 +27,10 @@ A foe is three things: **a die** (a list of face values), **a set of minigames**
 **One contest, one roll each.** Not a mode switch — a beat inside the turn.
 
 - You commit one die from your kit. **The die you commit is the die you stake.** Lose and the foe takes that die.
+- **Except your last one.** It cannot be taken, only broken: a loss drops its largest face, and only a die already worn to two faces is lost outright. The run starts on a single die, so without this the first foe ends it on a coin flip. A d5 survives three lost fights.
 - Win and the foe's die is offered. Kit is capped at D; over cap you choose one to discard.
 - Both dice roll. The minigame decides the winner.
+- While you hold one die an OPEN foe is played as TELL, because "choose which die to stake" is not a choice when there is one.
 
 **Commit-order traits** — the 分蛋糕 principle, one side frames and the other chooses:
 

@@ -4,7 +4,21 @@ extends SceneTree
 
 const Board = preload("res://src/board/board.gd")
 
+## A failed `assert` does not stop a `--script` run: it abandons the function it is in and hands control back, so the checks live in their own function and sign off at the end. Without the signature the run exits 1 instead of looking clean.
+var done := false
+
+
 func _initialize() -> void:
+	_checks()
+	if not done:
+		push_error("a check above failed")
+		quit(1)
+		return
+	print("board tests ok")
+	quit()
+
+
+func _checks() -> void:
 	for size in [PackedInt32Array([5, 5, 5]), PackedInt32Array([4, 4, 4, 4])]:
 		var n: int = Board.total_cells(size)
 
@@ -82,5 +96,4 @@ func _initialize() -> void:
 			var span: int = Board.manhattan(Board.index_to_coords(a, size), Board.index_to_coords(links[a], size))
 			assert(span <= 5, "%s: link spans %d, cap was 5" % [str(size), span])
 
-	print("board tests ok")
-	quit()
+	done = true

@@ -12,16 +12,18 @@ const Rules = preload("res://src/game/rules.gd")
 const MG = preload("res://src/game/minigames.gd")
 const Pal = preload("res://src/palette.gd")
 
-@onready var status: Label = $Margin/Rows/Status
+@onready var status: RichTextLabel = $Margin/Rows/Status
 @onready var help: VBoxContainer = $Margin/Rows/Help
 @onready var board_line: Label = $Margin/Rows/Help/Board
 @onready var menu: Label = $Margin/Rows/Help/Moves
 
+## Ink for reversed-out text. Near-black, because it sits on a full-brightness swatch and a bright glyph on a bright ground is not a glyph.
+const INK := Color(0.04, 0.05, 0.07)
+
 var last := {}
 
 
-## `s` carries the whole turn: coords, size, links, moves, roll, turns, won, faces,
-## kit, die_index, rerolls, mode.
+## `s` carries the whole turn: coords, size, links, moves, roll, turns, won, kit, die_index, rerolls, foes, fight, dead, roamer, floors, notice, mode.
 func refresh(s: Dictionary) -> void:
 	last = s
 	_status(s)
@@ -30,18 +32,22 @@ func refresh(s: Dictionary) -> void:
 	menu.text = _moves(s)
 
 
+## Reversed out: the swatch is the highlight, not the capitals. `Status` is a RichTextLabel for exactly this -- a Label can only colour the whole of itself, and "the word is in capitals" is not a highlight, it is shouting.
+func _hi(text: String, bg: Color) -> String:
+	return "[bgcolor=#%s][color=#%s] %s [/color][/bgcolor]" \
+			% [bg.to_html(false), INK.to_html(false), text]
+
+
+func _tint(text: String, c: Color) -> String:
+	return "[color=#%s]%s[/color]" % [c.to_html(false), text]
+
+
 func _status(s: Dictionary) -> void:
-	# The whole line turns the foe's colour while a fight is on. A Label cannot highlight one word of itself, but it can stop looking like the line that was there a second ago -- which is the part that says something changed.
-	# Removing the override rather than writing a second colour: the resting one is authored in main.tscn, and scene colours stay in the scene.
-	if s["fight"].is_empty():
-		status.remove_theme_color_override("font_color")
-	else:
-		status.add_theme_color_override("font_color", Pal.C_FOE)
 	if s["dead"]:
-		status.text = "RUN OVER  -  %d floors cleared  -  SHIFT+R restart" % s["floors"]
+		status.text = _hi("RUN OVER", Pal.C_SNAKE) + "  %d floors cleared  -  SHIFT+R restart" % s["floors"]
 		return
 	if s["won"]:
-		status.text = "WIN in %d turns  -  SHIFT+R restart" % s["turns"]
+		status.text = _hi("WIN", Pal.C_GOAL) + "  in %d turns  -  SHIFT+R restart" % s["turns"]
 		return
 	if not s["fight"].is_empty():
 		status.text = _fight(s["fight"], s)
@@ -50,30 +56,31 @@ func _status(s: Dictionary) -> void:
 	# How far the chaser has to walk to reach you. A number rather than something to read off the board, because in a projected 4D view nobody can count that by eye -- and a clock you cannot read is an ambush.
 	var chase := ""
 	if not s["roamer"].is_empty():
-		chase = "  -  chaser %d" % Board.manhattan(s["coords"], s["roamer"])
-	# The die, the roll and the spares are all objects on the tray now, so the line
-	# says only what the tray cannot: where you are, and what the board wants next.
+		chase = "  -  " + _tint("chaser %d" % Board.manhattan(s["coords"], s["roamer"]), Pal.C_FOE)
+	# The die, the roll and the spares are all objects on the tray now, so the line says only what the tray cannot: where you are, and what the board wants next.
 	if s["roll"] == 0:
 		status.text = "%s  -  floor %dD  -  turn %d%s  -  SPACE to roll  -  ESC help%s" \
 				% [here, s["size"].size(), s["turns"], chase, _note(s)]
 		return
 	if s["moves"].is_empty():
-		status.text = "%s  -  nothing legal from here%s%s" % [here, chase, _spare(s)]
+		status.text = "%s  -  nothing legal from here%s%s%s" % [here, chase, _spare(s), _note(s)]
 		return
-	status.text = "%s  -  pick a marker%s%s" % [here, chase, _spare(s)]
+	status.text = "%s  -  pick a marker%s%s%s" % [here, chase, _spare(s), _note(s)]
 
 
 ## The one line a fight needs: who is across the table, what is being contested, and which half of the choice is yours. The dice themselves are on the tray -- yours in the near corner, the foe's in the far one -- so this says nothing they already show.
 func _fight(f: Dictionary, s: Dictionary) -> String:
-	if f["discard"]:
-		return "FIGHT WON  -  kit full: LEFT/RIGHT choose, SPACE drops %s" \
-				% Rules.die_name(s["kit"][s["die_index"]])
-	var foe: Dictionary = f["foe"]
-	var head := "BOSS  best of 3, %d-%d" % [f["wins"], f["losses"]] if foe["boss"] else "FIGHT"
-	var last: String = "  -  %s" % f["last"] if not f["last"].is_empty() else ""
 	var mine: String = Rules.die_name(s["kit"][s["die_index"]])
+	if f["discard"]:
+		return _hi("KIT FULL", Pal.C_GOAL) + "  LEFT/RIGHT choose, SPACE drops %s%s" \
+				% [_hi(mine, Pal.C_MOVE), _note(s)]
+	var foe: Dictionary = f["foe"]
+	var head: String = _hi("BOSS  %d-%d of 3" % [f["wins"], f["losses"]], Pal.C_GOAL) \
+			if foe["boss"] else _hi("FIGHT", Pal.C_FOE)
+	var last: String = "  -  %s" % f["last"] if not f["last"].is_empty() else ""
+	var vs := "  vs %s" % _hi(Rules.die_name(foe["faces"]), Pal.C_FOE)
 	if f["game"] < 0:
-		# TELL: its die is on the table and the contest is yours to name. The one you are on is marked and shouted; the rest are quiet, so the choice reads without colour.
+		# TELL: its die is on the table and the contest is yours to name. The one you are about to commit to is reversed out; the rest are just text.
 		var left := []
 		for g in foe["games"]:
 			if not f["used"].has(g):
@@ -81,16 +88,16 @@ func _fight(f: Dictionary, s: Dictionary) -> String:
 		var parts := PackedStringArray()
 		for i in left.size():
 			var label: String = MG.ALL[left[i]].label()
-			parts.append("> %s <" % label if i == f["pick"] else label.to_lower())
-		return "%s  vs %s%s  -  UP/DOWN pick a contest, SPACE commits:   %s" \
-				% [head, Rules.die_name(foe["faces"]), last, "   ".join(parts)]
-	return "%s  vs %s%s  -  %s  -  SPACE stakes > %s <  (LEFT/RIGHT to change)" \
-			% [head, Rules.die_name(foe["faces"]), last, MG.ALL[f["game"]].label(), mine]
+			parts.append(_hi(label, Pal.C_MOVE) if i == f["pick"] else " %s " % label)
+		return "%s%s%s  -  UP/DOWN pick, SPACE commits:  %s%s" \
+				% [head, vs, last, "  ".join(parts), _note(s)]
+	return "%s%s%s  -  %s  -  SPACE stakes %s  (LEFT/RIGHT)%s" \
+			% [head, vs, last, _hi(MG.ALL[f["game"]].label(), Pal.C_FOE), _hi(mine, Pal.C_MOVE), _note(s)]
 
 
-## What just happened, carried until the next roll. Without it a fight ends and the only trace is a tray with one fewer die on it.
+## What just happened, or what the die you just picked up actually is. Carried until the next roll: a fight that ends in silence leaves you looking at a tray with one fewer die on it, and a die whose faces you cannot read is a die you cannot choose with.
 func _note(s: Dictionary) -> String:
-	return "" if s["notice"].is_empty() else "\n%s" % s["notice"]
+	return "" if s["notice"].is_empty() else "\n%s" % _tint(s["notice"], Pal.C_MOVE)
 
 
 ## The token is spent with the same key that rolls, so the line says so rather than naming a key nobody would guess.

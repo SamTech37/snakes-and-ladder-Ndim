@@ -171,6 +171,9 @@ func set_roamer(at: PackedInt32Array, next: PackedInt32Array) -> void:
 func _draw_roamer(im: ImmediateMesh) -> void:
 	if roamer.is_empty() or roamer_next.is_empty():
 		return
+	# A cell from the floor before this one has an axis this board does not, and the projection would read straight off the end of `size`. Dealing a new floor touches several things in an order, and this is the one that has to hold whatever that order turns out to be.
+	if roamer.size() != size.size():
+		return
 	var from := world(roamer)
 	var to := world(roamer_next)
 	var dir := (to - from).normalized()
