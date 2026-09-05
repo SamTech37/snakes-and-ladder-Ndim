@@ -28,4 +28,12 @@ end game ask replay or continue. continue makes the dimension goes from D to D+1
 
 # Session 2
 
-now the presence of Snakes & Ladders feels a bit weak. we have turned this thing into a game about dices and dimensionals and odds. but what about the funsies of being thwarted back in space? (and time perhaps.)
+now the presence of Snakes & Ladders (links) feels a bit weak. we have turned this thing into a game about dices and dimensionals and odds. but what about the funsies of being thwarted back in space? (and time perhaps.)
+
+oh right, the Roamer Foes roll their die to catch you, but they will also be affected by the links.
+
+Skills: passive skills provided by special/rare dies. e.g. can ignore Snakes, attracts to Ladders, has more favorable rolls, etc. simple stuff only. this might seems OP but in case that the later stages gets too difficult or repetitive, which they will, it'll come in handy
+
+the oracle die: a sphere, ask input for what roll of number you want, and gives you exactly that.
+
+the devil's die: no. faces = D, each direction gets a different value. you still pick one axis to move along.
