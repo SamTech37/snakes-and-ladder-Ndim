@@ -7,6 +7,7 @@ extends Node3D
 
 const Board = preload("res://src/board/board.gd")
 const AXIS_NAMES := "XYZWVU"
+const LABEL_FONT = preload("res://src/main/mono.tres")
 
 ## Flat color, nothing over 1.0. The environment does no glow and no filmic tonemap,
 ## so what is written here is what lands on screen; separation comes from brightness
@@ -23,7 +24,6 @@ const C_SNAKE := Color(1.0, 0.24, 0.60)
 const C_GOAL := Color(1.0, 0.89, 0.25)
 
 ## Debug gizmo, one per lattice axis in AXIS_NAMES order: X Y Z W V U.
-const AXIS_COLOR_NAMES := ["red", "green", "blue", "yellow", "magenta", "cyan"]
 const C_AXIS := [
 	Color(1.0, 0.28, 0.28),
 	Color(0.35, 1.0, 0.35),
@@ -32,6 +32,10 @@ const C_AXIS := [
 	Color(1.0, 0.40, 1.0),
 	Color(0.35, 1.0, 1.0),
 ]
+## Camera rotation rings, labelled in the world rather than printed as numbers.
+const C_YAW := Color(1.0, 0.55, 0.15)
+const C_PITCH := Color(0.70, 0.45, 1.0)
+const C_ROLL := Color(0.85, 0.85, 0.85)
 
 ## What a plane that is neither yours nor a destination drops to. Dimmed, not hidden:
 ## the stack has to stay visible or FOCUS stops being a view of the board.
@@ -84,6 +88,7 @@ static var SIZES: Array[PackedInt32Array] = [
 @onready var heads: MultiMeshInstance3D = $Heads
 @onready var dots: MultiMeshInstance3D = $Dots
 @onready var ghosts: Node3D = $Ghosts
+@onready var labels: Node3D = $DebugLabels
 @onready var player: MeshInstance3D = $Player
 @onready var status: Label = $HUD/Margin/Rows/Status
 @onready var menu: Label = $HUD/Margin/Rows/Moves
@@ -190,14 +195,18 @@ func _draw_board() -> void:
 	_star(im, _world(Board.goal_coords(size)), 0.45, C_GOAL)
 	if debug:
 		_draw_axes(im)
+	else:
+		_clear_labels()
 	im.surface_end()
 	_draw_links(lit)
 
 
-## One arrow per lattice axis, from the start cell along the direction a +1 step on
-## that axis actually moves. Taken from the projection rather than assumed, so it
-## stays correct for W and V and all the way through the spread tween.
+## One labelled arrow per lattice axis, from the start cell along the direction a +1
+## step on that axis actually moves, plus labelled rings for yaw, pitch and roll.
+## Directions are taken from the projection rather than assumed, so they stay correct
+## for W and V and all the way through the spread tween.
 func _draw_axes(im: ImmediateMesh) -> void:
+	_clear_labels()
 	var base := Board.index_to_coords(0, size)
 	var origin := _world(base)
 	for k in size.size():
@@ -220,6 +229,55 @@ func _draw_axes(im: ImmediateMesh) -> void:
 		for i in range(1, mini(size[k], 7)):
 			var at := origin + step * float(i)
 			_line(im, at - side * 0.6, at + side * 0.6, color)
+		_label(AXIS_NAMES[k] if k < AXIS_NAMES.length() else str(k), tip + dir * 0.6, color)
+
+	# Which way the camera turns. A compact widget sharing the axis arrows' origin, so
+	# orientation is something you look at rather than read. Sized off the board, not
+	# the zoom: rings scaled to the viewport swallowed everything behind them.
+	var b := cam.global_transform.basis
+	_ring(im, origin, Vector3.RIGHT, Vector3.BACK, 2.6, C_YAW, "YAW", 0.0)
+	_ring(im, origin, b.y, -b.z, 2.2, C_PITCH, "PITCH", -0.9)
+	_ring(im, origin, b.x, b.y, 1.8, C_ROLL, "ROLL", 0.9)
+
+
+## Circle spanned by `u` and `v`, labelled at the point furthest to screen-right and
+## lifted by `lift` so the three rings do not stack their labels on one another.
+func _ring(im: ImmediateMesh, centre: Vector3, u: Vector3, v: Vector3, r: float,
+		color: Color, name: String, lift: float) -> void:
+	var un := u.normalized()
+	var vn := v.normalized()
+	var prev := centre + un * r
+	var best := prev
+	var best_x := -INF
+	for i in range(1, 49):
+		var a := TAU * float(i) / 48.0
+		var p := centre + (un * cos(a) + vn * sin(a)) * r
+		_line(im, prev, p, color)
+		prev = p
+		var x := cam.global_transform.basis.x.dot(p)
+		if x > best_x:
+			best_x = x
+			best = p
+	_label(name, best + cam.global_transform.basis.y * lift, color)
+
+
+func _label(text: String, at: Vector3, color: Color) -> void:
+	var l := Label3D.new()
+	l.text = text
+	l.font = LABEL_FONT
+	l.font_size = 64
+	l.pixel_size = 0.006
+	l.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	l.no_depth_test = true
+	l.modulate = color
+	l.position = at
+	labels.add_child(l)
+
+
+func _clear_labels() -> void:
+	for l in labels.get_children():
+		labels.remove_child(l)
+		l.free()
 
 
 ## Links are real geometry, not lines and not billboards: a shaft cylinder, a cone
@@ -439,7 +497,9 @@ func _tween_angle(to: Vector2, secs := 0.45) -> void:
 			var a := from.lerp(to, u)
 			yaw = a.x
 			pitch = a.y
-			_frame_camera(), 0.0, 1.0, secs) \
+			_frame_camera()
+			if debug:
+				_draw_board(), 0.0, 1.0, secs) \
 		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
 
 
@@ -500,23 +560,6 @@ func _move_label(m: Dictionary) -> String:
 
 
 func _refresh_hud() -> void:
-	_write_hud()
-	if debug:
-		menu.text += "\n" + _debug_line()
-
-
-## Camera numbers and the axis legend, so an orbit that ends up somewhere strange can
-## be read rather than guessed at. Colours match the gizmo drawn by _draw_axes().
-func _debug_line() -> String:
-	var legend := PackedStringArray()
-	for k in size.size():
-		var name := AXIS_NAMES[k] if k < AXIS_NAMES.length() else str(k)
-		legend.append("%s %s" % [name, AXIS_COLOR_NAMES[k % AXIS_COLOR_NAMES.size()]])
-	return "dbg  yaw %+.2f (%+.0f deg)  pitch %+.2f (%+.0f deg)  zoom %.1f  spread %.2f  |  %s" % [
-			yaw, rad_to_deg(yaw), pitch, rad_to_deg(pitch), zoom, spread, ",  ".join(legend)]
-
-
-func _write_hud() -> void:
 	if won:
 		status.text = "WIN in %d turns  -  R to restart" % turns
 		menu.text = ""
@@ -632,6 +675,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		yaw = wrapf(yaw - event.relative.x * 0.006, -PI, PI)
 		pitch = wrapf(pitch - event.relative.y * 0.006, -PI, PI)
 		rig.rotation = Vector3(pitch, yaw, 0.0)
+		# The pitch and roll rings are built around the camera, so they have to be
+		# rebuilt as it turns. Only while the gizmo is up.
+		if debug:
+			_draw_board()
 	elif event is InputEventKey and event.pressed and not event.echo:
 		# ponytail: R, TAB and the number keys read raw keycodes rather than adding
 		# input actions to project.godot. "roll" reuses the built-in ui_accept.

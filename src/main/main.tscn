@@ -102,6 +102,8 @@ multimesh = SubResource("MM_dot")
 
 [node name="Ghosts" type="Node3D" parent="."]
 
+[node name="DebugLabels" type="Node3D" parent="."]
+
 [node name="Player" type="MeshInstance3D" parent="."]
 mesh = SubResource("Mesh_player")
 
