@@ -25,7 +25,10 @@ const C_HERE := Color(0.78, 0.46, 0.13)
 ## number tells you where it goes before you commit to it.
 const C_LADDER := Color(0.49, 1.0, 0.31)
 const C_SNAKE := Color(1.0, 0.24, 0.60)
-const C_GOAL := Color(1.0, 0.89, 0.25)
+## The goal. Hot amber-gold rather than the pale yellow this was: on a board of
+## violet, teal and acid green, a washed-out yellow read as another dim line instead
+## of as the thing you are trying to reach.
+const C_GOAL := Color(1.0, 0.72, 0.05)
 ## A move that lands on plain floor. Matches the marker color authored in ghost.tscn,
 ## and the dice on the tray: the same cyan says "this is yours to act with".
 const C_MOVE := Color(0.35, 0.92, 1.0)

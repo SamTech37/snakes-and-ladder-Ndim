@@ -118,7 +118,7 @@ func redraw() -> void:
 	for p in Board.plane_count(size):
 		_plane_frame(im, p, (Pal.C_HERE if p == here else Pal.C_FRAME) * _fade(p, lit))
 
-	_star(im, world(Board.goal_coords(size)), 0.45, Pal.C_GOAL)
+	_goal_beacon(im, world(Board.goal_coords(size)))
 	_preview_links(im)
 	_draw_fx(im)
 	if debug:
@@ -127,6 +127,29 @@ func redraw() -> void:
 		_clear_labels()
 	im.surface_end()
 	_draw_links(lit)
+
+
+## The goal was a four-line asterisk at 0.45 units, in pale yellow, on a board with a
+## hundred other lines on it -- there was nothing to say it was the end of the game
+## rather than one more piece of grid. It is a cage now: a diamond around the cell,
+## a ring around its waist, and spikes out of the top and bottom, at more than twice
+## the size. Wireframe, like everything else here and like the plates in ideas/.
+func _goal_beacon(im: ImmediateMesh, at: Vector3) -> void:
+	var r := 0.6
+	var h := 0.85
+	var top := at + Vector3(0.0, h, 0.0)
+	var bot := at - Vector3(0.0, h, 0.0)
+	var ring: Array[Vector3] = []
+	for i in 8:
+		var a := TAU * float(i) / 8.0
+		ring.append(at + Vector3(cos(a) * r, 0.0, sin(a) * r))
+	for i in 8:
+		_line(im, ring[i], ring[(i + 1) % 8], Pal.C_GOAL)
+		_line(im, ring[i], top, Pal.C_GOAL)
+		_line(im, ring[i], bot, Pal.C_GOAL)
+	# Spikes past the cage, so it still reads when the cage is edge-on.
+	for v in [Vector3.UP, Vector3.DOWN, Vector3.RIGHT, Vector3.LEFT]:
+		_line(im, at + v * r * 0.5, at + v * (h + 0.35), Pal.C_GOAL)
 
 
 ## Landing somewhere is a thing that happened to a cell, so the cell says so: a ring

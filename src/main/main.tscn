@@ -1,4 +1,4 @@
-[gd_scene load_steps=23 format=3]
+[gd_scene load_steps=21 format=3]
 
 [ext_resource type="Script" path="res://src/main/main.gd" id="1_main"]
 [ext_resource type="PackedScene" path="res://src/ghost/ghost.tscn" id="2_ghost"]
@@ -69,12 +69,6 @@ height = 0.52
 radial_segments = 12
 rings = 6
 
-[sub_resource type="BoxMesh" id="Mesh_die"]
-size = Vector3(0.17, 0.17, 0.17)
-
-[sub_resource type="BoxMesh" id="Mesh_spare"]
-size = Vector3(0.09, 0.09, 0.09)
-
 [sub_resource type="SystemFont" id="Font_mono"]
 font_names = PackedStringArray("JetBrains Mono", "DejaVu Sans Mono", "Liberation Mono", "monospace")
 subpixel_positioning = 0
@@ -102,11 +96,10 @@ fov = 50.0
 script = ExtResource("7_tray")
 
 [node name="Die0" type="MeshInstance3D" parent="CamRig/Camera3D/Tray"]
-mesh = SubResource("Mesh_die")
 
 [node name="Face" type="Label3D" parent="CamRig/Camera3D/Tray/Die0"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.11)
-pixel_size = 0.00085
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.235, 0)
+pixel_size = 0.00075
 billboard = 1
 no_depth_test = true
 font = SubResource("Font_mono")
@@ -114,11 +107,10 @@ font_size = 96
 text = "d6"
 
 [node name="Die1" type="MeshInstance3D" parent="CamRig/Camera3D/Tray"]
-mesh = SubResource("Mesh_die")
 
 [node name="Face" type="Label3D" parent="CamRig/Camera3D/Tray/Die1"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.11)
-pixel_size = 0.00085
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.235, 0)
+pixel_size = 0.00075
 billboard = 1
 no_depth_test = true
 font = SubResource("Font_mono")
@@ -129,7 +121,6 @@ text = "d3"
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.62, 0, 0)
 
 [node name="Spare" type="MeshInstance3D" parent="CamRig/Camera3D/Tray/Spares"]
-mesh = SubResource("Mesh_spare")
 
 [node name="Board" type="Node3D" parent="."]
 script = ExtResource("4_board")

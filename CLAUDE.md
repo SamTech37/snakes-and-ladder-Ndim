@@ -191,6 +191,8 @@ Pick a die, roll it for step size, then pick an axis and direction. A move that 
 | `Player` (MeshInstance3D) | `SphereMesh` + `Mat_player`. |
 | `HUD` (CanvasLayer) | `Margin → Rows → Status, Help`. Mono `SystemFont`, dark `StyleBoxFlat` so text never fights the board. **One line stays on screen** — where you are, what you rolled, tokens held. The move list, the legend and the controls sit in `Help`, hidden until `ESC` fades it in. The board is supposed to say what the moves are; a wall of text next to it says the markers failed. `bar_px()` measures `Status` only, so opening the overlay does not reframe the board. |
 
+**The goal is a beacon, not a mark.** It was a four-line asterisk 0.45 units across, in pale yellow, on a board carrying a hundred other lines — nothing said it was the end of the game rather than more grid. `_goal_beacon()` draws a wireframe cage: an eight-sided diamond around the cell, a ring at its waist, spikes out of all four directions so it still reads when the cage is edge-on. `C_GOAL` went from pale yellow to hot amber-gold for the same reason.
+
 Line colors are consts at the top of `main.gd` (`C_SHELL_START`, `C_SHELL_GOAL`, `C_FRAME`, `C_HERE`, `C_LADDER`, `C_SNAKE`, `C_GOAL`). Don't hardcode a color inline; add a const. **Nothing goes above 1.0** — there is no glow pass to catch it, and the reference art in `ideas/` has no bloom in it either.
 
 ### Two views
@@ -222,6 +224,8 @@ They have to stay visibly different. Two separate changes have collapsed the dis
 **It exists because none of this survived being text.** The kit was a line in the HUD, so nobody knew there were two dice; the reroll was an invisible counter spent with a key nobody would guess. On the tray the kit *is* two dice — the picked one bright and forward, the other dim and back — and a reroll *is* a spare die sitting beside them. Click a die to pick it up, click a spare to spend it. One spare is authored in the scene and the rest are copies of it.
 
 Hit-testing is `unproject_position` and a pixel radius, not collision shapes: two boxes do not need a physics subsystem to answer where they are on screen. A left click only counts as a click if it moved less than 6 px, because the same button orbits the camera.
+
+The dice are **wireframe bipyramids with one side per face** — a d5 is a five-sided diamond, a d3 a three-sided one, so the silhouette counts the die out for you — built as `ImmediateMesh` line lists by `_bipyramid()`. Solid boxes were the one lump of matter on a board made entirely of lines; the plates in `ideas/` are see-through wireframes, and so is everything else here. The picked die turns slowly on the spot, because a wireframe solid only reads as a solid while it moves.
 
 **The roll lands on the die, not on the player.** The number used to pop over the player's head with a descending noise burst, which reads as the board hitting *them* rather than a move they chose. Now the picked die tumbles and comes up on the number, and the sound rises instead of falling.
 
