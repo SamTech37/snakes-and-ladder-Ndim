@@ -91,7 +91,9 @@ Restart is on `SHIFT+R` because a bare `R` sits beside every key you actually us
 
 Pan exists because the fit frames the whole board: zoomed in on a big lattice there is otherwise no way to reach the corner being played in. It is an offset on top of the fitted pivot, so a refit keeps it; `C` flies it back to zero along with the orbit.
 
-`D` walks `Rules.SIZES` — `[6,6,6]` → `[4,4,4,4]`. The higher-dimensional boards have to be reachable from inside the game, not only by editing an export. 5D is out until 3D and 4D are right; the code generalises to it, but a third broken view only obscures which one is wrong.
+`D` walks `Rules.SIZES` — `[6,6,6]` → `[4,4,4,4]` → `[3,3,3,3,3]` → `[10,10]`. Every dimension count has to be reachable from inside the game, not only by editing an export.
+
+2D is one plane with no deck to explode, so TAB only widens the spacing; it is the board everyone already knows. 5D draws and plays, and measures 0% ambiguous at both home angles, but nine decks of nine cells each leave the board small and sparse on screen — see the `_stack_offset` note about axes 4+ marching downward at a widening stride.
 
 `C` exists because orbit is free and it is easy to end up looking at nothing; it **flies** the camera back to the current view's own angle and forgets the parked one.
 

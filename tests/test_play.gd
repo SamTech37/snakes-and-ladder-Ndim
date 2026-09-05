@@ -29,7 +29,10 @@ func _initialize() -> void:
 			peak = maxi(peak, absi(d.decode_s16(i)))
 		assert(peak > 3000, "%s is silent" % sound)
 
-	for size in [PackedInt32Array([5, 5, 5]), PackedInt32Array([4, 4, 4, 4])]:
+	# One board per dimension count the game offers, since 2D and 5D exercise the ends
+	# of the layout math: no deck at all, and axes 4+ marching downward.
+	for size in [PackedInt32Array([10, 10]), PackedInt32Array([5, 5, 5]),
+			PackedInt32Array([4, 4, 4, 4]), PackedInt32Array([3, 3, 3, 3, 3])]:
 		var m = load("res://src/main/main.tscn").instantiate()
 		m.size = size
 		m.anim = false

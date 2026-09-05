@@ -28,6 +28,9 @@
 
 Not verified: the sound audibly — headless has no device, only the sample peaks were checked. Nobody has played a full game by hand since the tray landed.
 
+### Added after
+`D` now cycles 3D → 4D → 5D → 2D. Both new boards are data only, no code changed: `[10,10]` is one plane (kit d6/d3, 8.87 expected rolls), `[3,3,3,3,3]` is nine decks (kit d2, 8.09). Both measure 0% ambiguity at their home angles, and `test_play` runs all four. 5D is legible but small and sparse — the layout spreads axes 4+ downward at a widening stride.
+
 ### Next
 
 1. **Events and foes** (job ii). Nothing designed yet. `Rules.landing()` is the single hook — add a case there and a colour to the palette, and markers pick up shape and colour for free. Unlock rules for extra dice and reroll tokens belong here, as does the d1.

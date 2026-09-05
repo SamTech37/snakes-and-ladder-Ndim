@@ -13,12 +13,16 @@ const Board = preload("res://src/board/board.gd")
 ## the game rather than only by editing the export or a test script.
 ## ponytail: static var, not const -- PackedInt32Array literals are not constant
 ## expressions, so a const array of them will not parse.
-## ponytail: 5D is deliberately not in here. The code generalises to it and it drew
-## fine, but 3D and 4D are not right yet and shipping a third broken view only makes
-## it harder to tell which one is wrong. Add [3,3,3,3,3] back when 3D and 4D are good.
+## [6,6,6] stays first: tests/odds.gd holds that one to a target band, and it is the
+## board the game opens on.
 static var SIZES: Array[PackedInt32Array] = [
 	PackedInt32Array([6, 6, 6]),
 	PackedInt32Array([4, 4, 4, 4]),
+	PackedInt32Array([3, 3, 3, 3, 3]),
+	# 2D: one plane, no deck to explode, so TAB only widens the spacing. It is the
+	# board everyone already knows, and it is the one place the projection cannot be
+	# blamed for anything.
+	PackedInt32Array([10, 10]),
 ]
 
 ## The dice the player picks between before rolling. Measured on [6,6,6]: a single d5
