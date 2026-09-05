@@ -1,0 +1,21 @@
+[gd_scene load_steps=3 format=3]
+
+[sub_resource type="StandardMaterial3D" id="Mat_ghost"]
+shading_mode = 0
+albedo_color = Color(0.5, 0.9, 1.2, 1)
+
+[sub_resource type="BoxMesh" id="Mesh_ghost"]
+material = SubResource("Mat_ghost")
+size = Vector3(0.3, 0.3, 0.3)
+
+[node name="Ghost" type="MeshInstance3D"]
+mesh = SubResource("Mesh_ghost")
+
+[node name="Number" type="Label3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.4, 0)
+pixel_size = 0.004
+billboard = 1
+no_depth_test = true
+font_size = 96
+modulate = Color(0.5, 0.9, 1.2, 1)
+text = "1"
