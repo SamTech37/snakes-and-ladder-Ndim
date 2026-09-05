@@ -12,18 +12,6 @@ const Rules = preload("res://src/game/rules.gd")
 
 enum View { SPREAD, FOCUS }
 
-## Boards D cycles through, so the higher-dimensional ones are reachable from inside
-## the game rather than only by editing the export or a test script.
-## ponytail: static var, not const -- PackedInt32Array literals are not constant
-## expressions, so a const array of them will not parse.
-## ponytail: 5D is deliberately not in here. The code generalises to it and it drew
-## fine, but 3D and 4D are not right yet and shipping a third broken view only makes
-## it harder to tell which one is wrong. Add [3,3,3,3,3] back when 3D and 4D are good.
-static var SIZES: Array[PackedInt32Array] = [
-	PackedInt32Array([6, 6, 6]),
-	PackedInt32Array([4, 4, 4, 4]),
-]
-
 @export var size := PackedInt32Array([6, 6, 6])
 @export var link_count := 18
 ## Manhattan cap on a link's reach. Uncapped endpoints gave full-width lines that
@@ -71,6 +59,7 @@ func _ready() -> void:
 	rig.board = view3d
 	rig.hud = hud
 	ghosts.board = view3d
+	view3d.fx = anim
 
 	# SNL_SEED pins the board so two runs render the same thing — without it a
 	# screenshot can't be compared against the one before it.
@@ -176,8 +165,8 @@ func snap_view(v: View) -> void:
 ## Next board in SIZES, wrapping. Deals a fresh game, because changing the shape of
 ## the lattice invalidates every coordinate in the old one.
 func _cycle_size() -> void:
-	var i := SIZES.find(size)
-	size = SIZES[(i + 1) % SIZES.size()] if i >= 0 else SIZES[0]
+	var i := Rules.SIZES.find(size)
+	size = Rules.SIZES[(i + 1) % Rules.SIZES.size()] if i >= 0 else Rules.SIZES[0]
 	new_game()
 
 
@@ -200,8 +189,11 @@ func _roll(spend_turn: bool) -> void:
 	if spend_turn:
 		turns += 1
 	moves = Board.legal_moves(coords, size, roll)
+	Audio.play("roll")
+	view3d.roll_pop(roll, coords)
 	if Rules.grants_reroll(moves, coords, size):
 		rerolls += 1
+		Audio.play("token")
 	ghosts.show_moves(moves, links)
 	_redraw()
 	_refresh_hud()
@@ -227,14 +219,19 @@ func choose(i: int) -> void:
 	# Which planes are lit changed the moment the move list emptied.
 	_redraw()
 	await _hop(dest, 0.35, Tween.TRANS_BOUNCE)
+	view3d.land_flash(coords)
 
 	var idx := Board.coords_to_index(coords, size)
 	if links.has(idx):
+		Audio.play("snake" if Rules.landing(coords, size, links) == "SNAKE" else "ladder")
 		await _slide_link(Board.index_to_coords(links[idx], size))
 
 	# Landing somewhere new changes which plane is lit and which frame is warm.
 	_redraw()
 	won = Board.dist_to_goal(coords, size) == 0
+	if won:
+		Audio.play("win")
+		view3d.win_burst()
 	busy = false
 	_refresh_hud()
 
@@ -244,6 +241,7 @@ func _hop(dest: PackedInt32Array, secs: float, trans: Tween.TransitionType) -> v
 		coords = dest
 		player.position = view3d.world(dest)
 		return
+	Audio.play("hop")
 	var t := create_tween()
 	t.tween_property(player, "position", view3d.world(dest), secs) \
 		.set_trans(trans).set_ease(Tween.EASE_OUT)
@@ -314,6 +312,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			return
 		elif event.is_action_pressed("ui_accept") and moves.is_empty():
 			do_roll()
+		elif event.keycode == KEY_M:
+			Audio.toggle_mute()
 		elif event.keycode == KEY_X:
 			reroll()
 		elif event.keycode >= KEY_1 and event.keycode <= KEY_9:

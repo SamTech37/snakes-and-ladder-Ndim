@@ -70,9 +70,10 @@ godot --headless --script tests/test_board.gd      # lattice math asserts
 godot --headless --script tests/test_play.gd       # random play-throughs of the real scene
 godot --headless --script tests/odds.gd            # E[rolls] per board, solved not guessed
 
-# Scripts are interpreted, so a typo only surfaces when the scene loads. Parse-check
-# before running anything long — a cross-node call breaks `:=` and nothing else says so.
-godot --headless --check-only --script src/main/main.gd
+# Scripts are interpreted, so a typo only surfaces when the scene loads. Check before
+# running anything long — a cross-node call breaks `:=` and nothing else says so.
+godot --headless --check-only --script src/board/board_view.gd   # one script
+godot --headless --quit                                          # whole project + autoloads
 
 # These two need a real display: --headless uses the dummy rasterizer and hangs.
 # Run them in the FOREGROUND — a backgrounded GUI run dies with exit 144.
@@ -84,11 +85,11 @@ SNL_SEED=7 DISPLAY=:0 godot --position -6000,-6000 --script tests/shot.gd -- sho
 
 `shot.gd` args: output path, size, spread (`0` stacked / `1` exploded), `roll`, and an optional `yaw,pitch`. Screenshots go to `shots/`, which is gitignored.
 
-Controls: `SPACE` roll, number keys pick a move — or pick the die when no move is pending — `X` spend a reroll, `TAB` switch SPREAD/FOCUS, `D` cycle board dimensions, `C` recentre the camera, `F3` debug view, `R` restart, drag to orbit, right-drag to pan, wheel to zoom.
+Controls: `SPACE` roll, number keys pick a move — or pick the die when no move is pending — `X` spend a reroll, `ESC` help overlay, `M` mute, `TAB` switch SPREAD/FOCUS, `D` cycle board dimensions, `C` recentre the camera, `F3` debug view, `R` restart, drag to orbit, right-drag to pan, wheel to zoom.
 
 Pan exists because the fit frames the whole board: zoomed in on a big lattice there is otherwise no way to reach the corner being played in. It is an offset on top of the fitted pivot, so a refit keeps it; `C` flies it back to zero along with the orbit.
 
-`D` walks `Main.SIZES` — `[6,6,6]` → `[4,4,4,4]` → `[3,3,3,3,3]`. The higher-dimensional boards have to be reachable from inside the game, not only by editing an export.
+`D` walks `Rules.SIZES` — `[6,6,6]` → `[4,4,4,4]`. The higher-dimensional boards have to be reachable from inside the game, not only by editing an export. 5D is out until 3D and 4D are right; the code generalises to it, but a third broken view only obscures which one is wrong.
 
 `C` exists because orbit is free and it is easy to end up looking at nothing; it **flies** the camera back to the current view's own angle and forgets the parked one.
 
@@ -112,14 +113,15 @@ src/camera/cam_rig.gd            on CamRig: yaw, pitch, zoom, pan, the fit, the 
 src/ghost/ghosts.gd              on Ghosts: the numbered markers
 src/ghost/ghost.tscn             one marker, instanced per legal move
 src/hud/hud.gd                   on HUD: formats the text, changes no state
+src/autoload/audio.gd            autoload `Audio`: every sound, synthesised, no files
 src/palette.gd                   every color in the game
-tests/                           test_board.gd, test_play.gd, test_readable.gd, shot.gd
+tests/                           test_board.gd, test_play.gd, odds.gd, test_readable.gd, shot.gd
 ```
 
 Each script owns one node and its children. Nothing reaches up the tree for a
 neighbour: `main.gd:_ready()` wires the cross-references (`rig.board`, `view3d.rig`,
 `ghosts.board`) in one place, and everything else talks through methods. `board.gd`
-and `rules.gd` stay nodeless so the lattice and the odds can be measured headless.
+and `rules.gd` stay nodeless so the lattice and the odds can be measured headless — which is also why `Rules.SIZES` lives there and not on `main.gd`: a `--script` run compiles preloads *before* autoloads are registered, so anything preloading `main.gd` fails on `Audio` not existing yet.
 
 **Cross-node calls kill `:=`.** A `var rig: Node3D` returns Variant from every method, so `var side := rig.perp(dir)` fails to parse with *"Cannot infer the type"* — the same gotcha as untyped containers. Annotate: `var side: Vector3 = rig.perp(dir)`.
 
@@ -210,10 +212,20 @@ They have to stay visibly different. Two separate changes have collapsed the dis
 - **Don't hand-roll geometry the renderer already does.** Links were first drawn as camera-facing quads in an `ImmediateMesh` and read as flat paper, because that is what they were. `MultiMeshInstance3D` with a `CylinderMesh` shaft, a zero-top-radius `CylinderMesh` cone and a `SphereMesh` dot gives real 3D that foreshortens and occludes properly — and needs no per-frame rebuild when the camera orbits.
 - **`anim = false`** makes every hop instant so `test_play.gd` can run whole games without waiting on real-time tweens.
 
+### Sound and effects
+
+`src/autoload/audio.gd` is the autoload `Audio`, and it is the one thing in the project that is genuinely global — a snake sounds from wherever the snake happened. **There are no audio files.** Every sound is synthesised into an `AudioStreamWAV` at startup from a handful of parameters: square and saw waves with a hard cubic decay, which is where the flat-vector look already is, and which costs no binaries and no licence tracking. Six sounds — roll, hop, ladder, snake, token, win — plus a looping pad: two detuned saws holding A minor with an arpeggio picking through it.
+
+Drop a CC0 loop at `res://assets/bgm.ogg` and it replaces the generated music; nothing else changes.
+
+Sound generated by arithmetic can come out silent without erroring anywhere, so `test_play.gd` checks the peak sample of every buffer rather than trusting it.
+
+Three effects, all `Tween`-driven into the board's own `ImmediateMesh` so they sit in the layout and follow the spread tween for free: the rolled number rising at the player, a ring opening where a move lands, the goal star thrown outward on a win. `anim = false` turns them off with everything else.
+
 ### Move markers
 
 **A marker says what it does three ways: colour, shape, and a line.** `Rules.landing()` is the single source — plain cyan cube, green cone up for a ladder, pink cone down for a snake, yellow diamond for the goal — and a marker on a link draws a dim line to where that link would drag you, which is the half colour cannot carry. `test_play.gd` asserts colour and shape agree on every marker of every turn.
 
 ## Not Built Yet
 
-Solo play only. No sound, menus, or save. Ghost markers are chosen by number key, not clicked — numbers still work when 5D offers ten directions. A cross-panel link in SPREAD shows a stub at each end but does not say which panel it lands in; FOCUS is where you read that.
+Solo play only. No menus or save. Ghost markers are chosen by number key, not clicked — numbers still work when 5D offers ten directions. A cross-panel link in SPREAD shows a stub at each end but does not say which panel it lands in; FOCUS is where you read that.

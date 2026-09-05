@@ -11,6 +11,24 @@ const Pal = preload("res://src/palette.gd")
 const TURN_CAP := 2000
 
 func _initialize() -> void:
+	# The sound bank is arithmetic, so it can come out silent without erroring
+	# anywhere. Headless has no audio device to hear it on -- check the samples.
+	#
+	# Fetched by name, not as `Audio`: a --script run compiles this file before the
+	# autoloads are registered, so the global name does not exist yet at compile time.
+	# And not before a frame has passed -- root is not in the tree during _initialize,
+	# which makes any absolute path an error.
+	await process_frame
+	var audio := root.get_node_or_null("Audio")
+	assert(audio != null, "the Audio autoload is not registered")
+	for sound in ["roll", "hop", "ladder", "snake", "token", "win"]:
+		var d: PackedByteArray = audio.bank[sound].data
+		assert(d.size() > 1000, "%s is an empty buffer" % sound)
+		var peak := 0
+		for i in range(0, d.size() - 1, 64):
+			peak = maxi(peak, absi(d.decode_s16(i)))
+		assert(peak > 3000, "%s is silent" % sound)
+
 	for size in [PackedInt32Array([5, 5, 5]), PackedInt32Array([4, 4, 4, 4])]:
 		var m = load("res://src/main/main.tscn").instantiate()
 		m.size = size

@@ -19,7 +19,6 @@ extends SceneTree
 
 const Board = preload("res://src/board/board.gd")
 const Rules = preload("res://src/game/rules.gd")
-const Main = preload("res://src/main/main.gd")
 
 ## What a game on the default board should cost. Below this the board is a formality;
 ## above it, a slog. The measured 13.4 rolls for a lone d5 sat at the top of it, and
@@ -29,10 +28,10 @@ const TARGET := Vector2(4.0, 16.0)
 
 func _initialize() -> void:
 	print("\n%-16s %6s %10s %10s" % ["board", "kit", "E[rolls]", "floor"])
-	for size in Main.SIZES:
+	for size in Rules.SIZES:
 		var e := _solve(size)
 		print("%-16s %6s %10.2f %10.2f" % [str(size), str(Rules.kit(size)), e, _floor(size)])
-		if size == Main.SIZES[0]:
+		if size == Rules.SIZES[0]:
 			assert(e >= TARGET.x and e <= TARGET.y,
 					"%s takes %.1f rolls, outside the %.0f-%.0f the game is tuned for"
 					% [str(size), e, TARGET.x, TARGET.y])

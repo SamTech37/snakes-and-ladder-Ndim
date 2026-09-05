@@ -42,6 +42,12 @@ var flat := false
 ## F3 axis gizmo.
 var debug := false
 
+## Off with `anim`, so test_play.gd is not waiting on flashes it cannot see.
+var fx := true
+
+## Effects currently running: each is a cell, a color and a 0..1 clock.
+var fx_active := []
+
 ## Last game state handed over, so a redraw driven by the spread tween or an orbit
 ## does not need the turn loop to pass it all again.
 var coords := PackedInt32Array()
@@ -114,12 +120,90 @@ func redraw() -> void:
 
 	_star(im, world(Board.goal_coords(size)), 0.45, Pal.C_GOAL)
 	_preview_links(im)
+	_draw_fx(im)
 	if debug:
 		_draw_axes(im)
 	else:
 		_clear_labels()
 	im.surface_end()
 	_draw_links(lit)
+
+
+## Landing somewhere is a thing that happened to a cell, so the cell says so: a ring
+## that opens and fades where the player came down.
+func land_flash(c: PackedInt32Array) -> void:
+	_flash(c, Pal.C_HERE, "ring", 0.45)
+
+
+## Reaching the goal is the only event in the game that ends it. It gets the star it
+## already draws there, thrown outward.
+func win_burst() -> void:
+	_flash(Board.goal_coords(size), Pal.C_GOAL, "star", 0.9)
+
+
+## The rolled number, at the player, rising and fading. The HUD says it too, but the
+## HUD is not where you are looking when you are looking at the board.
+func roll_pop(n: int, c: PackedInt32Array) -> void:
+	if not fx:
+		return
+	var l := Label3D.new()
+	l.text = str(n)
+	l.font = LABEL_FONT
+	l.font_size = 64
+	l.pixel_size = 0.007
+	l.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	l.no_depth_test = true
+	l.modulate = Pal.C_HERE
+	# Its own child, not one of DebugLabels': those are cleared on every redraw.
+	l.position = world(c) + Vector3(0.0, 0.5, 0.0)
+	add_child(l)
+	var t := create_tween()
+	t.set_parallel()
+	t.tween_property(l, "position", l.position + Vector3(0.0, 0.9, 0.0), 0.7) \
+		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	t.tween_property(l, "modulate:a", 0.0, 0.7).set_delay(0.2)
+	t.chain().tween_callback(l.queue_free)
+
+
+## An effect is a cell, a color and a 0..1 clock. It is drawn with the board rather
+## than as its own node, so it sits in the layout and follows the spread tween like
+## everything else does.
+func _flash(c: PackedInt32Array, color: Color, kind: String, secs: float) -> void:
+	if not fx:
+		return
+	var f := {"cell": c, "color": color, "kind": kind, "u": 0.0}
+	fx_active.append(f)
+	var t := create_tween()
+	t.tween_method(func(u: float):
+			f["u"] = u
+			redraw(), 0.0, 1.0, secs)
+	t.tween_callback(func():
+			fx_active.erase(f)
+			redraw())
+
+
+func _draw_fx(im: ImmediateMesh) -> void:
+	for f in fx_active:
+		var u: float = f["u"]
+		var at := world(f["cell"])
+		var color: Color = f["color"] * (1.0 - u)
+		if f["kind"] == "ring":
+			_flat_ring(im, at, lerpf(0.2, 1.5, u), color)
+		else:
+			_star(im, at, lerpf(0.4, 3.0, u), color)
+
+
+## A circle facing the camera. The board's own rings are built in world planes because
+## they describe rotation axes; this one is a flash on the screen and should be round
+## from wherever you are looking.
+func _flat_ring(im: ImmediateMesh, at: Vector3, r: float, color: Color) -> void:
+	var b: Basis = rig.cam.global_transform.basis
+	var prev := at + b.x * r
+	for i in range(1, 25):
+		var a := TAU * float(i) / 24.0
+		var p := at + (b.x * cos(a) + b.y * sin(a)) * r
+		_line(im, prev, p, color)
+		prev = p
 
 
 ## A move that lands on a link draws a line to where the link would drag you. The
