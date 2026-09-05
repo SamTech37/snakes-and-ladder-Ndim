@@ -354,8 +354,12 @@ func _set_view(v: View) -> void:
 	if view == View.FOCUS:
 		parked[View.FOCUS] = Vector2(yaw, pitch)
 	view = v
-	var from_angle := Vector2(yaw, pitch)
 	var to_angle: Vector2 = parked.get(View.FOCUS, A_ISO) if v == View.FOCUS else A_FLAT
+	# Rebase to the equivalent yaw nearest the target before interpolating. Orbiting
+	# nine times round leaves yaw nine turns from where it started, and a plain lerp
+	# to the stored angle then unwinds every one of them on screen.
+	yaw = to_angle.x + wrapf(yaw - to_angle.x, -PI, PI)
+	var from_angle := Vector2(yaw, pitch)
 	var from_spread := spread
 	var to_spread := 1.0 if v == View.SPREAD else 0.0
 	var t := create_tween()
@@ -541,8 +545,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN and event.pressed:
 			_set_zoom(zoom * 1.1)
 	elif event is InputEventMouseMotion and dragging:
-		yaw -= event.relative.x * 0.006
-		pitch = clampf(pitch - event.relative.y * 0.006, -1.5, 1.5)
+		# Wrapped, so yaw never drifts to some large multiple of a turn away from the
+		# angles it gets compared against.
+		yaw = wrapf(yaw - event.relative.x * 0.006, -PI, PI)
+		pitch = clampf(pitch - event.relative.y * 0.006, -1.4, 1.4)
 		rig.rotation = Vector3(pitch, yaw, 0.0)
 	elif event is InputEventKey and event.pressed and not event.echo:
 		# ponytail: R, TAB and the number keys read raw keycodes rather than adding
