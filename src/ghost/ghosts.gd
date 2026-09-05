@@ -7,6 +7,11 @@ extends Node3D
 const Rules = preload("res://src/game/rules.gd")
 const Pal = preload("res://src/palette.gd")
 
+## Which child of ghost.tscn is shown for each `Rules.landing()` kind. Shape as well as
+## color, so the marker still says what it does to a player who cannot tell the two
+## greens apart -- and so it reads at a glance rather than by comparison.
+const SHAPE := {"": "Plain", "LADDER": "Ladder", "SNAKE": "Snake", "GOAL": "Goal"}
+
 @export var ghost_scene: PackedScene
 
 ## Wired by main: markers sit at board positions, so they follow the spread tween.
@@ -24,10 +29,13 @@ func show_moves(m: Array, links: Dictionary) -> void:
 	for i in moves.size():
 		var g := ghost_scene.instantiate()
 		g.get_node("Number").text = str(i + 1)
-		var c := Pal.landing_color(Rules.landing(moves[i]["coords"], board.size, links))
-		# The mesh and its material are sub-resources of ghost.tscn and every instance
-		# shares them, so the tint has to be an override rather than a write.
-		g.material_override = _mat(c)
+		var kind := Rules.landing(moves[i]["coords"], board.size, links)
+		var c := Pal.landing_color(kind)
+		var shape: MeshInstance3D = g.get_node(SHAPE[kind])
+		shape.visible = true
+		# The meshes and their material are sub-resources of ghost.tscn and every
+		# instance shares them, so the tint has to be an override rather than a write.
+		shape.material_override = _mat(c)
 		g.get_node("Number").modulate = c
 		add_child(g)
 	place()

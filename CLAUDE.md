@@ -184,7 +184,7 @@ Pick a die, roll it for step size, then pick an axis and direction. A move that 
 | `Shafts`/`Heads`/`Dots` (MultiMeshInstance3D) | The links, as real geometry: cylinder, cone, sphere, instanced per link by `_draw_links()`. |
 | `Ghosts` (Node3D) | Parent for per-turn move markers. |
 | `Player` (MeshInstance3D) | `SphereMesh` + `Mat_player`. |
-| `HUD` (CanvasLayer) | `Margin → Rows → Status, Moves`. Mono `SystemFont`, dark `StyleBoxFlat` so text never fights the board. |
+| `HUD` (CanvasLayer) | `Margin → Rows → Status, Help`. Mono `SystemFont`, dark `StyleBoxFlat` so text never fights the board. **One line stays on screen** — where you are, what you rolled, tokens held. The move list, the legend and the controls sit in `Help`, hidden until `ESC` fades it in. The board is supposed to say what the moves are; a wall of text next to it says the markers failed. `bar_px()` measures `Status` only, so opening the overlay does not reframe the board. |
 
 Line colors are consts at the top of `main.gd` (`C_SHELL_START`, `C_SHELL_GOAL`, `C_FRAME`, `C_HERE`, `C_LADDER`, `C_SNAKE`, `C_GOAL`). Don't hardcode a color inline; add a const. **Nothing goes above 1.0** — there is no glow pass to catch it, and the reference art in `ideas/` has no bloom in it either.
 
@@ -209,6 +209,10 @@ They have to stay visibly different. Two separate changes have collapsed the dis
 - **`--headless` cannot render.** It uses the dummy rasterizer; `--headless --rendering-driver vulkan` hangs outright. Screenshots need a real `DISPLAY`, and must run in the **foreground** — backgrounded GUI runs die with exit 144. Park the window with `--position -6000,-6000` plus `WINDOW_FLAG_NO_FOCUS`; it still renders and captures fine from off-screen, and stops stealing the desktop. (`xvfb-run` would be cleaner but Xvfb is not installed.)
 - **Don't hand-roll geometry the renderer already does.** Links were first drawn as camera-facing quads in an `ImmediateMesh` and read as flat paper, because that is what they were. `MultiMeshInstance3D` with a `CylinderMesh` shaft, a zero-top-radius `CylinderMesh` cone and a `SphereMesh` dot gives real 3D that foreshortens and occludes properly — and needs no per-frame rebuild when the camera orbits.
 - **`anim = false`** makes every hop instant so `test_play.gd` can run whole games without waiting on real-time tweens.
+
+### Move markers
+
+**A marker says what it does three ways: colour, shape, and a line.** `Rules.landing()` is the single source — plain cyan cube, green cone up for a ladder, pink cone down for a snake, yellow diamond for the goal — and a marker on a link draws a dim line to where that link would drag you, which is the half colour cannot carry. `test_play.gd` asserts colour and shape agree on every marker of every turn.
 
 ## Not Built Yet
 

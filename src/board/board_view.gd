@@ -8,6 +8,7 @@ extends Node3D
 ## main.tscn; it authors none of them.
 
 const Board = preload("res://src/board/board.gd")
+const Rules = preload("res://src/game/rules.gd")
 ## Every color comes from here. Don't write a Color() literal in this file.
 const Pal = preload("res://src/palette.gd")
 const LABEL_FONT = preload("res://src/main/mono.tres")
@@ -112,12 +113,28 @@ func redraw() -> void:
 		_plane_frame(im, p, (Pal.C_HERE if p == here else Pal.C_FRAME) * _fade(p, lit))
 
 	_star(im, world(Board.goal_coords(size)), 0.45, Pal.C_GOAL)
+	_preview_links(im)
 	if debug:
 		_draw_axes(im)
 	else:
 		_clear_labels()
 	im.surface_end()
 	_draw_links(lit)
+
+
+## A move that lands on a link draws a line to where the link would drag you. The
+## marker's color says a snake is there; this says which snake, which is the half the
+## color cannot carry -- and it is drawn with the board, so it follows the spread
+## tween without any work of its own.
+func _preview_links(im: ImmediateMesh) -> void:
+	for m in moves:
+		var idx := Board.coords_to_index(m["coords"], size)
+		if not links.has(idx):
+			continue
+		var kind := Rules.landing(m["coords"], size, links)
+		# Dimmer than the link geometry it parallels: this is a hint about a move you
+		# have not made, not another object on the board.
+		_line(im, world(m["coords"]), world(cell(links[idx])), Pal.landing_color(kind) * 0.55)
 
 
 ## One labelled arrow per lattice axis, from the start cell along the direction a +1

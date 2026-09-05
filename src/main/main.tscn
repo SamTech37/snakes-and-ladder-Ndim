@@ -142,9 +142,41 @@ theme_override_styles/normal = SubResource("Box_hud")
 theme_override_font_sizes/font_size = 22
 text = "SPACE to roll"
 
-[node name="Moves" type="Label" parent="HUD/Margin/Rows"]
+[node name="Help" type="VBoxContainer" parent="HUD/Margin/Rows"]
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Board" type="Label" parent="HUD/Margin/Rows/Help"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.62, 0.66, 0.85, 1)
 theme_override_fonts/font = SubResource("Font_mono")
 theme_override_styles/normal = SubResource("Box_hud")
 theme_override_font_sizes/font_size = 16
+
+[node name="Moves" type="Label" parent="HUD/Margin/Rows/Help"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.66, 0.85, 1)
+theme_override_fonts/font = SubResource("Font_mono")
+theme_override_styles/normal = SubResource("Box_hud")
+theme_override_font_sizes/font_size = 16
+
+[node name="Legend" type="Label" parent="HUD/Margin/Rows/Help"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.66, 0.85, 1)
+theme_override_fonts/font = SubResource("Font_mono")
+theme_override_styles/normal = SubResource("Box_hud")
+theme_override_font_sizes/font_size = 16
+text = "marker   cube plain   cone up LADDER   cone down SNAKE   diamond GOAL
+         a link's marker draws a line to where it drags you"
+
+[node name="Controls" type="Label" parent="HUD/Margin/Rows/Help"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.66, 0.85, 1)
+theme_override_fonts/font = SubResource("Font_mono")
+theme_override_styles/normal = SubResource("Box_hud")
+theme_override_font_sizes/font_size = 16
+text = "SPACE  roll          number keys  pick a move, or pick the die between turns
+X      reroll        TAB  view        D  dimensions      C  recentre
+F3     debug         R    restart     ESC  close this
+drag orbit           right-drag pan   wheel zoom"

@@ -7,7 +7,8 @@ extends SceneTree
 ## Run: SNL_SEED=7 DISPLAY=:0 godot --script tests/shot.gd -- shots/a.png 6,6,6 1 roll
 ## Args, all optional: output path, board size, spread (0 stacked / 1 exploded), and
 ## "roll" to take a turn first so the numbered move markers are in frame. A fifth
-## "yaw,pitch" argument overrides the default isometric angle.
+## "yaw,pitch" argument overrides the default isometric angle. "debug" adds the axis
+## gizmo, "help" opens the ESC overlay.
 
 func _initialize() -> void:
 	_hide_window()
@@ -28,11 +29,14 @@ func _initialize() -> void:
 	await process_frame
 
 	m.view3d.debug = args.has("debug")
+	if args.has("help"):
+		m.hud.toggle_help()
 	if args.size() > 3 and args[3] == "roll":
 		m.do_roll()
 	# Straight to the end state of the view rather than waiting on the tween.
 	m.snap_view(m.View.SPREAD if args.size() > 2 and args[2].to_float() > 0.5 else m.View.FOCUS)
-	if args.size() > 4:
+	# Only a "yaw,pitch" pair, so the flag words can sit in the same position.
+	if args.size() > 4 and args[4].contains(","):
 		var ang := args[4].split(",")
 		m.rig.yaw = ang[0].to_float()
 		m.rig.pitch = ang[1].to_float()

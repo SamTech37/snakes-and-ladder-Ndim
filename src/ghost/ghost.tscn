@@ -1,4 +1,4 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene load_steps=7 format=3]
 
 [sub_resource type="SystemFont" id="Font_mono"]
 font_names = PackedStringArray("JetBrains Mono", "DejaVu Sans Mono", "Liberation Mono", "monospace")
@@ -8,12 +8,50 @@ subpixel_positioning = 0
 shading_mode = 0
 albedo_color = Color(0.35, 0.92, 1, 1)
 
-[sub_resource type="BoxMesh" id="Mesh_ghost"]
+[sub_resource type="BoxMesh" id="Mesh_plain"]
 material = SubResource("Mat_ghost")
 size = Vector3(0.3, 0.3, 0.3)
 
-[node name="Ghost" type="MeshInstance3D"]
-mesh = SubResource("Mesh_ghost")
+[sub_resource type="CylinderMesh" id="Mesh_up"]
+material = SubResource("Mat_ghost")
+top_radius = 0.0
+bottom_radius = 0.22
+height = 0.44
+radial_segments = 10
+rings = 0
+
+[sub_resource type="CylinderMesh" id="Mesh_down"]
+material = SubResource("Mat_ghost")
+top_radius = 0.22
+bottom_radius = 0.0
+height = 0.44
+radial_segments = 10
+rings = 0
+
+[sub_resource type="SphereMesh" id="Mesh_goal"]
+material = SubResource("Mat_ghost")
+radius = 0.26
+height = 0.52
+radial_segments = 4
+rings = 2
+
+[node name="Ghost" type="Node3D"]
+
+[node name="Plain" type="MeshInstance3D" parent="."]
+visible = false
+mesh = SubResource("Mesh_plain")
+
+[node name="Ladder" type="MeshInstance3D" parent="."]
+visible = false
+mesh = SubResource("Mesh_up")
+
+[node name="Snake" type="MeshInstance3D" parent="."]
+visible = false
+mesh = SubResource("Mesh_down")
+
+[node name="Goal" type="MeshInstance3D" parent="."]
+visible = false
+mesh = SubResource("Mesh_goal")
 
 [node name="Number" type="Label3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.4, 0)

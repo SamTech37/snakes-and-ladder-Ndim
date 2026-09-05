@@ -46,19 +46,24 @@ func _initialize() -> void:
 				m.reroll()
 				assert(m.turns == t, "a reroll cost a turn")
 				assert(m.rerolls <= held, "a reroll did not spend its token")
-			# Every marker is tinted by what it lands on -- untinted, the numbers say
-			# nothing about which move is a snake.
+			# Every marker is tinted and shaped by what it lands on -- plain, the
+			# numbers say nothing about which move is a snake.
 			for i in m.moves.size():
 				var idx := Board.coords_to_index(m.moves[i]["coords"], size)
-				var want: Color = Pal.C_MOVE
+				var kind := ""
 				if idx == Board.total_cells(size) - 1:
-					want = Pal.C_GOAL
+					kind = "GOAL"
 				elif m.links.has(idx):
 					var to := Board.index_to_coords(m.links[idx], size)
 					var up := Board.dist_to_goal(to, size) < Board.dist_to_goal(m.moves[i]["coords"], size)
-					want = Pal.C_LADDER if up else Pal.C_SNAKE
-				assert(m.ghosts.get_child(i).material_override.albedo_color == want,
+					kind = "LADDER" if up else "SNAKE"
+				var g: Node3D = m.ghosts.get_child(i)
+				var want: Color = Pal.landing_color(kind)
+				assert(g.get_node("Number").modulate == want,
 						"move %d marker is not tinted for what it lands on" % (i + 1))
+				var shape: MeshInstance3D = g.get_node(m.ghosts.SHAPE[kind])
+				assert(shape.visible and shape.material_override.albedo_color == want,
+						"move %d marker is not shaped for what it lands on" % (i + 1))
 			if not m.moves.is_empty():
 				m.choose(randi() % m.moves.size())
 			await process_frame

@@ -2,50 +2,56 @@ extends CanvasLayer
 
 ## The text. Handed a snapshot of the turn and formats it -- it reads game state and
 ## never changes any.
+##
+## One line stays on the play screen. Everything else -- the move list, the legend, the
+## controls -- lives behind ESC, because the board is supposed to say what the moves
+## are: the markers are numbered, tinted and shaped for exactly that.
 
 const Board = preload("res://src/board/board.gd")
 const Rules = preload("res://src/game/rules.gd")
 
 @onready var status: Label = $Margin/Rows/Status
-@onready var menu: Label = $Margin/Rows/Moves
+@onready var help: VBoxContainer = $Margin/Rows/Help
+@onready var board_line: Label = $Margin/Rows/Help/Board
+@onready var menu: Label = $Margin/Rows/Help/Moves
+
+var last := {}
 
 
 ## `s` carries the whole turn: coords, size, links, moves, roll, turns, won, faces,
-## planes, mode.
+## kit, die_index, rerolls, mode.
 func refresh(s: Dictionary) -> void:
+	last = s
+	_status(s)
+	board_line.text = "%dD board %s  -  %d planes  -  %s view  -  %s" \
+			% [s["size"].size(), str(s["size"]), Board.plane_count(s["size"]), s["mode"], _kit(s)]
+	menu.text = _moves(s)
+
+
+func _status(s: Dictionary) -> void:
 	if s["won"]:
-		status.text = "WIN in %d turns  -  R to restart" % s["turns"]
-		menu.text = ""
+		status.text = "WIN in %d turns  -  R restart" % s["turns"]
 		return
 	var here := "(%s)" % ", ".join(Array(s["coords"]).map(func(v): return str(v)))
+	var tail := "" if s["rerolls"] == 0 else "  -  X reroll x%d" % s["rerolls"]
 	if s["roll"] == 0:
-		status.text = "at %s  -  turn %d  -  SPACE to roll d%d%s" \
-				% [here, s["turns"], s["faces"], _tokens(s)]
-		menu.text = "%s  -  %dD board %s  -  %d planes  -  %s view  -  TAB view, D dimensions, C recentre, F3 debug, R restart  -  drag to orbit, right-drag to pan, wheel to zoom" \
-				% [_kit(s), s["size"].size(), str(s["size"]), Board.plane_count(s["size"]), s["mode"]]
+		status.text = "%s  -  turn %d  -  SPACE roll d%d%s  -  ESC help" \
+				% [here, s["turns"], s["faces"], tail]
 		return
-	status.text = "rolled %d on d%d  -  at %s  -  turn %d%s" \
-			% [s["roll"], s["faces"], here, s["turns"], _tokens(s)]
+	if s["moves"].is_empty():
+		status.text = "%s  -  rolled %d, nothing legal%s" % [here, s["roll"], tail]
+		return
+	status.text = "%s  -  rolled %d, pick a marker%s" % [here, s["roll"], tail]
+
+
+func _moves(s: Dictionary) -> String:
 	var moves: Array = s["moves"]
 	if moves.is_empty():
-		menu.text = "no legal move  -  %s  -  SPACE to roll again" % _escape(s)
-		return
+		return "no move on the board"
 	var lines := PackedStringArray()
 	for i in moves.size():
 		lines.append("%d)  %s" % [i + 1, _move_label(moves[i], s["size"], s["links"])])
-	if s["rerolls"] > 0:
-		lines.append(_escape(s))
-	menu.text = "\n".join(lines)
-
-
-func _tokens(s: Dictionary) -> String:
-	return "" if s["rerolls"] == 0 else "  -  %d reroll%s" % [s["rerolls"], "" if s["rerolls"] == 1 else "s"]
-
-
-func _escape(s: Dictionary) -> String:
-	if s["rerolls"] <= 0:
-		return "no reroll left"
-	return "X to reroll (%d left)" % s["rerolls"]
+	return "\n".join(lines)
 
 
 ## The kit, with the selected die marked. The number keys pick between them while no
@@ -68,13 +74,26 @@ func _move_label(m: Dictionary, size: PackedInt32Array, links: Dictionary) -> St
 			"" if kind.is_empty() else "  " + kind]
 
 
+## Fades rather than cuts: a panel that appears between frames reads as a glitch the
+## same way a camera jump does.
+func toggle_help() -> void:
+	var opening := not help.visible
+	if opening:
+		help.modulate.a = 0.0
+		help.visible = true
+	var t := create_tween()
+	t.tween_property(help, "modulate:a", 1.0 if opening else 0.0, 0.15)
+	if not opening:
+		t.tween_callback(func(): help.visible = false)
+
+
 ## Height the text actually occupies, so the camera fit can keep the board out from
-## under it rather than guessing a margin.
+## under it rather than guessing a margin. The overlay is not counted: it is a panel
+## you opened over the board, not a permanent bar the board has to live below.
 ##
-## Measures the two labels, not their container: `Rows` sits in a full-screen
-## MarginContainer and is stretched to it, so asking the container gave ~850 px of
-## "bar" on a 900 px window. That drove the fit to frame roughly twice the board and
-## shoved the pivot most of a screen downward -- the board came out small and low in
-## every screenshot, in orthographic just as much as in perspective.
+## Measures the label, not its container: `Rows` sits in a full-screen MarginContainer
+## and is stretched to it, so asking the container gave ~850 px of "bar" on a 900 px
+## window. That drove the fit to frame roughly twice the board and shoved the pivot
+## most of a screen downward.
 func bar_px() -> float:
-	return status.size.y + menu.size.y + 48.0
+	return status.size.y + 48.0

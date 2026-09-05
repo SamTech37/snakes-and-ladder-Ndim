@@ -294,6 +294,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		# input actions to project.godot. "roll" reuses the built-in ui_accept.
 		if event.keycode == KEY_R:
 			new_game()
+		elif event.keycode == KEY_ESCAPE:
+			hud.toggle_help()
 		elif event.keycode == KEY_TAB:
 			_set_view(View.FOCUS if view == View.SPREAD else View.SPREAD)
 		elif event.keycode == KEY_C:
